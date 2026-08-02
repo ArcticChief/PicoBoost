@@ -5,8 +5,7 @@ Tauri 2, Rust, TypeScript, and vanilla CSS. It applies a small set of reversible
 Windows changes before a game session and restores the recorded state when the
 session ends.
 
-The project grew from the `Arctic-GamingMode` PowerShell workflow, but it does
-not reproduce its destructive or disruptive steps. PicoBoost does not stop
+PicoBoost is designed around predictable, user-visible actions. It does not stop
 Explorer, stop Windows services, purge caches, or terminate applications during
 activation.
 
