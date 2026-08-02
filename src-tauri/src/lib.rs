@@ -11,6 +11,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
+use tauri::Manager;
 
 // ============================================================================
 // PicoBoost backend
@@ -3898,6 +3899,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(StorageAnalyzerState::default())
+        .setup(|app| {
+            // Explicitly assign the bundled icon to the native window. Windows can
+            // otherwise retain the development executable icon for an unpinned
+            // taskbar button even after the packaged executable has been updated.
+            if let (Some(window), Some(icon)) = (
+                app.get_webview_window("main"),
+                app.default_window_icon().cloned(),
+            ) {
+                window.set_icon(icon)?;
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_system_info,
             get_system_details,
