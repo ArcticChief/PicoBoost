@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PicoBoost</title>
+  <style>
+    html, body, #app {
+      background-color: #0d0f17 !important;
+      color: #e2e8f0;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+  </style>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+
+<body>
+  <div id="app">
+    <!-- Integrated Custom Dark Titlebar -->
+    <div id="titlebar" data-tauri-drag-region>
+      <div class="titlebar-left" data-tauri-drag-region>
+        <svg class="titlebar-logo" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        <span class="titlebar-title">PicoBoost</span>
+      </div>
+      <div class="titlebar-center" data-tauri-drag-region>Gaming Mode Optimizer · v2.4.1</div>
+      <div class="titlebar-controls">
+        <button id="titlebar-minimize" class="titlebar-btn" type="button" title="Minimize" aria-label="Minimize PicoBoost">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <button id="titlebar-maximize" class="titlebar-btn" type="button" title="Maximize / Restore" aria-label="Maximize or restore PicoBoost">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+        </button>
+        <button id="titlebar-close" class="titlebar-btn danger" type="button" title="Close" aria-label="Close PicoBoost">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="app-body">
+      <!-- Left column: system stats + presets + feature toggles -->
+      <div id="control-panel">
+        <div id="system-card" class="machine-card" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="system-details-overlay" title="Open focused system details">
+          <div class="machine-row">
+            <span class="machine-label">CPU</span>
+            <span id="stat-cpu" class="machine-value">Detecting…</span>
+          </div>
+          <div class="machine-row">
+            <span class="machine-label">OS</span>
+            <span id="stat-os" class="machine-value">—</span>
+          </div>
+          <div class="machine-row ram-row">
+            <span class="machine-label">RAM</span>
+            <span id="stat-ram" class="machine-value">—</span>
+          </div>
+          <div class="ram-gauge"><div id="ram-gauge-fill" class="ram-gauge-fill"></div></div>
+          <div class="machine-open-hint">
+            <span>View system details</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+          </div>
+        </div>
+
+        <div class="panel-section-title">PRESET</div>
+        <div id="preset-group" class="preset-group">
+          <button class="preset-btn active" data-preset="Performance">Performance</button>
+          <button class="preset-btn" data-preset="Balanced">Balanced</button>
+          <button class="preset-btn" data-preset="Minimal">Minimal</button>
+        </div>
+
+        <div class="panel-section-title">SESSION TUNING</div>
+        <div id="toggle-list" class="toggle-list">
+          <label class="toggle-card"><input type="checkbox" data-opt="memoryReadiness"><span class="tg-name">🧠 Memory Readiness</span><span class="tg-desc">Checks real pressure; never flushes cache</span></label>
+          <label class="toggle-card"><input type="checkbox" data-opt="powerPlan"><span class="tg-name">⚡ Performance Power</span><span class="tg-desc">High Performance until Restore</span></label>
+          <label class="toggle-card"><input type="checkbox" data-opt="gameMode"><span class="tg-name">🎯 Windows Game Mode</span><span class="tg-desc">Prioritize game workloads</span></label>
+          <label class="toggle-card"><input type="checkbox" data-opt="pauseBackgroundRecording"><span class="tg-name">⏺️ Pause Replay Buffer</span><span class="tg-desc">Manual captures stay available</span></label>
+          <div class="toggle-card tuning-card">
+            <label class="tuning-toggle-label">
+              <input type="checkbox" data-opt="launchApplications">
+              <span class="tg-name">🚀 Launch Applications</span>
+              <span id="launch-apps-summary" class="tg-desc">Steam</span>
+            </label>
+            <button id="launch-apps-configure" class="tuning-config-btn" type="button" aria-haspopup="dialog" aria-controls="launch-apps-overlay" title="Configure launch applications">
+              <span id="launch-apps-count" class="tuning-config-count">1</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.12.37.33.7.6 1 .3.27.68.41 1.1.4h.09v4h-.09a1.7 1.7 0 0 0-1.7.6z"></path></svg>
+            </button>
+          </div>
+        </div>
+        <div class="safe-session-note">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          <span>No apps are closed, suspended, or reprioritized.</span>
+        </div>
+      </div>
+
+      <!-- Right column: hero action + activity console + dashboard -->
+      <div id="stage">
+        <div class="hero">
+          <section id="launch-panel" class="launch-panel" aria-labelledby="launch-panel-title">
+            <header class="launch-panel-head">
+              <div>
+                <span class="launch-kicker">GAME SESSION CONTROL</span>
+                <strong id="launch-panel-title">Ready to optimize</strong>
+              </div>
+              <span id="launch-state-chip" class="launch-state-chip"><i></i> READY</span>
+            </header>
+            <div class="launch-panel-body">
+              <div class="launch-context launch-context-profile">
+                <span>PROFILE</span>
+                <strong id="launch-profile-name">Performance</strong>
+                <small id="launch-profile-detail">5 session actions selected</small>
+              </div>
+          <button id="boost-btn" class="boost-btn" type="button" title="Activate Gaming Mode" aria-label="Activate the selected gaming profile">
+            <svg class="boost-ring" width="158" height="158" viewBox="0 0 158 158" aria-hidden="true">
+              <defs>
+                <linearGradient id="boost-gradient" x1="16" y1="18" x2="142" y2="140" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#67e8f9"></stop>
+                  <stop offset="0.48" stop-color="#818cf8"></stop>
+                  <stop offset="1" stop-color="#a78bfa"></stop>
+                </linearGradient>
+              </defs>
+              <circle class="ring-aura" cx="79" cy="79" r="75" fill="none" stroke-width="1"></circle>
+              <circle class="ring-track" cx="79" cy="79" r="68" fill="none" stroke-width="5"></circle>
+              <circle id="ring-progress" class="ring-progress" cx="79" cy="79" r="68" fill="none" stroke-width="5" transform="rotate(-90 79 79)"></circle>
+              <circle class="ring-sweep" cx="79" cy="79" r="73" fill="none" stroke-width="2" transform="rotate(-90 79 79)"></circle>
+            </svg>
+            <span class="boost-face">
+              <span class="boost-core" aria-hidden="true">
+                <svg class="boost-activate-icon" width="31" height="31" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                <svg class="boost-restore-icon" width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
+              </span>
+              <span id="boost-label" class="boost-label">ACTIVATE</span>
+              <span id="boost-sublabel" class="boost-sublabel">SELECTED PROFILE</span>
+            </span>
+          </button>
+              <div class="launch-context launch-context-safety">
+                <span>SAFE RETURN</span>
+                <strong>Reversible</strong>
+                <small>Original state recorded on activate</small>
+              </div>
+            </div>
+          <div class="hero-actions">
+            <div id="session-state" class="session-state" role="status" aria-live="polite"><span class="session-state-dot"></span><span id="session-state-text">Reversible session ready</span></div>
+            <div class="hero-tools">
+              <button id="memory-tools-btn" class="cleanup-tools-btn memory-tools-btn" type="button" aria-haspopup="dialog" aria-controls="memory-tools-overlay">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v3M16 3v3M8 18v3M16 18v3M3 8h3M18 8h3M3 16h3M18 16h3"></path><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M9 10h6M9 14h4"></path></svg>
+                Memory Readiness
+                <span>Pressure-aware</span>
+              </button>
+              <button id="cleanup-tools-btn" class="cleanup-tools-btn" type="button" aria-haspopup="dialog" aria-controls="cleanup-overlay">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M9 10v7M15 10v7"></path></svg>
+                System Cleanup
+                <span>Scan first</span>
+              </button>
+              <button id="storage-map-btn" class="cleanup-tools-btn storage-map-btn" type="button" aria-haspopup="dialog" aria-controls="storage-map-overlay">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>
+                Storage Map
+                <span>Manual</span>
+              </button>
+            </div>
+          </div>
+          <div id="hero-hint" class="hero-hint">One click applies the selected session profile. Click again to restore.</div>
+          </section>
+        </div>
+
+        <div class="console-wrap">
+          <div class="console-head">
+            <span class="console-title">ACTIVITY</span>
+            <button id="clear-log" class="mini-btn" title="Clear log">Clear</button>
+          </div>
+          <div id="console" class="console"></div>
+        </div>
+
+        <div id="dashboard" class="dashboard hidden">
+          <div class="dash-cell"><span class="dash-num" id="d-time">0.0s</span><span class="dash-lbl">Elapsed</span></div>
+          <div class="dash-cell"><span class="dash-num" id="d-power">—</span><span class="dash-lbl">Power</span></div>
+          <div class="dash-cell"><span class="dash-num" id="d-game-mode">—</span><span class="dash-lbl">Game Mode</span></div>
+          <div class="dash-cell"><span class="dash-num" id="d-recording">—</span><span class="dash-lbl">Replay Buffer</span></div>
+          <div class="dash-cell"><span class="dash-num" id="d-memory">—</span><span class="dash-lbl">Apps / Processes</span></div>
+          <div class="dash-cell"><span class="dash-num" id="d-launch">—</span><span class="dash-lbl">Launch</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Non-blocking toast -->
+    <div id="app-toast" class="app-toast hidden"><span id="app-toast-text" class="app-toast-text"></span></div>
+
+    <!-- Focused, gaming-relevant system information -->
+    <div id="system-details-overlay" class="system-details-overlay hidden" aria-hidden="true">
+      <section class="system-details-dialog" role="dialog" aria-modal="true" aria-labelledby="system-details-title">
+        <header class="system-details-header">
+          <div class="system-details-heading">
+            <span class="system-details-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"></path></svg>
+            </span>
+            <div>
+              <h2 id="system-details-title">System snapshot</h2>
+              <p>Useful hardware data for gaming and performance checks</p>
+            </div>
+          </div>
+          <button id="system-details-close" class="system-details-close" type="button" aria-label="Close system details">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+          </button>
+        </header>
+        <div id="system-details-content" class="system-details-content">
+          <div class="system-details-loading"><span class="details-spinner"></span><span>Reading hardware…</span></div>
+        </div>
+        <footer class="system-details-footer">
+          <span class="copy-dot"></span>
+          Click a CPU or GPU name to copy it
+        </footer>
+      </section>
+    </div>
+
+    <!-- Explicit, scan-first maintenance tools; separate from Gaming Mode -->
+    <div id="cleanup-overlay" class="cleanup-overlay hidden" aria-hidden="true">
+      <section class="cleanup-dialog" role="dialog" aria-modal="true" aria-labelledby="cleanup-title">
+        <header class="cleanup-header">
+          <div class="cleanup-heading">
+            <span class="cleanup-heading-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M9 10v7M15 10v7"></path></svg>
+            </span>
+            <div>
+              <h2 id="cleanup-title">System cleanup</h2>
+              <p>See what can be removed before anything changes</p>
+            </div>
+          </div>
+          <button id="cleanup-close" class="system-details-close" type="button" aria-label="Close cleanup tools">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+          </button>
+        </header>
+        <div class="cleanup-safety-strip">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          Fixed safe locations only. No registry cleaner, personal data, cookies, or arbitrary folders.
+        </div>
+        <div class="cleanup-overview">
+          <div class="cleanup-found" aria-live="polite">
+            <span>SCANNED</span>
+            <strong id="cleanup-found-size">Scanning…</strong>
+            <small id="cleanup-found-meta">Checking approved locations</small>
+          </div>
+          <div class="cleanup-bulk" role="group" aria-label="Bulk cleanup selection">
+            <button id="cleanup-recommended" class="cleanup-bulk-btn recommended" type="button" disabled>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2L7.8 16l.8-4.7L5.2 8l4.7-.7z"></path></svg>
+              Recommended
+            </button>
+            <button id="cleanup-check-all" class="cleanup-bulk-btn all" type="button" title="Select every detected cleanup category" disabled>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="m8 12 3 3 5-6"></path></svg>
+              Check all
+            </button>
+            <button id="cleanup-clear-all" class="cleanup-bulk-btn subtle" type="button" disabled>Clear</button>
+          </div>
+        </div>
+        <div id="cleanup-selection-risk" class="cleanup-selection-risk hidden" role="status" aria-live="polite"></div>
+        <div id="cleanup-content" class="cleanup-content">
+          <div class="cleanup-loading"><span class="details-spinner"></span><span>Scanning approved cache locations…</span></div>
+        </div>
+        <footer class="cleanup-footer">
+          <div>
+            <strong id="cleanup-selection">Nothing selected</strong>
+            <span>Locked and active files are skipped</span>
+          </div>
+          <div class="cleanup-footer-actions">
+            <button id="cleanup-rescan" class="cleanup-rescan" type="button">Rescan</button>
+            <button id="cleanup-run" class="cleanup-run" type="button" disabled>Clean selected</button>
+          </div>
+        </footer>
+      </section>
+    </div>
+
+    <!-- Pressure-aware memory readiness; no global cache or working-set flushes -->
+    <div id="memory-tools-overlay" class="memory-tools-overlay hidden" aria-hidden="true">
+      <section class="memory-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="memory-tools-title">
+        <header class="memory-tools-header">
+          <div class="memory-tools-heading">
+            <span class="memory-tools-heading-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v3M16 3v3M8 18v3M16 18v3M3 8h3M18 8h3M3 16h3M18 16h3"></path><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M9 10h6M9 14h4"></path></svg>
+            </span>
+            <div><h2 id="memory-tools-title">Memory readiness</h2><p>Understand real pressure and recover RAM from apps you choose</p></div>
+          </div>
+          <button id="memory-tools-close" class="system-details-close" type="button" aria-label="Close memory readiness">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+          </button>
+        </header>
+        <div class="memory-tools-safety">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          Windows cache stays untouched and Explorer is protected. Normal close is tried first; force close is available only after a second explicit warning.
+        </div>
+        <div id="memory-tools-loading" class="memory-tools-loading"><span class="details-spinner"></span><strong>Reading memory pressure…</strong></div>
+        <div id="memory-tools-content" class="memory-tools-content hidden">
+          <div class="memory-overview">
+            <div><span>AVAILABLE</span><strong id="memory-available">—</strong><small id="memory-total">—</small></div>
+            <div><span>PHYSICAL USE</span><strong id="memory-used">—</strong><small>Includes active workloads</small></div>
+            <div><span>COMMIT</span><strong id="memory-commit">—</strong><small>RAM + page-file capacity</small></div>
+            <div id="memory-pressure-card"><span>READINESS</span><strong id="memory-pressure">—</strong><small id="memory-guidance">Checking…</small></div>
+          </div>
+          <div class="memory-explanation">
+            <strong>Two useful levels — both under your control</strong>
+            <span><b>Balance</b> keeps an app open but makes Windows favor game memory under pressure. <b>Close selected</b> contacts every window and verifies the app exited; stubborn apps get a separate, clearly warned force-close choice.</span>
+          </div>
+          <div class="memory-balance-plan">
+            <div><strong>GAMING SESSION BALANCE</strong><span id="memory-balance-summary">No background apps configured</span></div>
+            <div id="memory-balance-chips" class="memory-balance-chips"></div>
+          </div>
+          <div class="memory-apps-heading"><div><strong>VISIBLE APPLICATIONS</strong><span>Check apps to close, or use Balance to keep them open at lower memory priority</span></div><button id="memory-tools-refresh" class="storage-toolbar-btn" type="button">Refresh</button></div>
+          <div id="memory-apps-list" class="memory-apps-list"></div>
+        </div>
+        <footer class="memory-tools-footer">
+          <div><strong id="memory-selection">Nothing selected to close</strong><span>Balance choices apply automatically on ACTIVATE and restore on RESTORE</span></div>
+          <button id="memory-close-selected" class="memory-close-selected" type="button" disabled>Close selected apps</button>
+        </footer>
+      </section>
+    </div>
+
+    <!-- Visual, user-directed storage analyzer -->
+    <div id="storage-map-overlay" class="storage-map-overlay hidden" aria-hidden="true">
+      <section class="storage-map-dialog" role="dialog" aria-modal="false" aria-labelledby="storage-map-title">
+        <header class="storage-map-header">
+          <div class="storage-map-heading">
+            <span class="storage-map-heading-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>
+            </span>
+            <div>
+              <h2 id="storage-map-title">Storage map</h2>
+              <p id="storage-map-subtitle">Understand a folder visually and choose what to recycle</p>
+            </div>
+          </div>
+          <div class="storage-window-controls">
+            <button id="storage-map-minimize" class="system-details-close" type="button" title="Collapse storage map" aria-label="Collapse storage map" aria-pressed="false">
+              <svg class="storage-collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 12h12"></path></svg>
+              <svg class="storage-expand-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path></svg>
+            </button>
+            <button id="storage-map-close" class="system-details-close" type="button" aria-label="Close storage map">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+            </button>
+          </div>
+        </header>
+        <div class="storage-map-safety">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          Nothing is selected automatically. Removed items go to the Windows Recycle Bin—never permanent deletion.
+        </div>
+        <div id="storage-map-progress" class="storage-map-progress hidden" role="status" aria-live="polite">
+          <span class="storage-progress-spinner" aria-hidden="true"></span>
+          <div class="storage-progress-copy">
+            <strong id="storage-map-progress-title">Preparing folder scan…</strong>
+            <span id="storage-map-progress-path" class="storage-progress-path">Waiting for folder selection</span>
+            <div class="storage-progress-stats">
+              <span id="storage-map-progress-count">Starting scanner…</span>
+              <span id="storage-map-progress-elapsed">0s elapsed</span>
+            </div>
+            <div class="storage-progress-track" aria-hidden="true"><span></span></div>
+            <small id="storage-map-progress-help">Large game folders can take a few minutes. You can collapse this tool and keep using PicoBoost.</small>
+          </div>
+          <button id="storage-map-cancel" class="storage-toolbar-btn" type="button">Cancel scan</button>
+        </div>
+        <div id="storage-map-empty" class="storage-map-empty">
+          <span class="storage-empty-visual">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7h6l2 2h10v10H3z"></path><path d="M8 14h8M12 10v8"></path></svg>
+          </span>
+          <strong>Choose one folder to understand</strong>
+          <span>PicoBoost will measure its contents and highlight what uses the most space.</span>
+          <button id="storage-map-choose-empty" class="storage-primary-btn" type="button">Choose folder</button>
+        </div>
+        <div id="storage-map-workspace" class="storage-map-workspace hidden">
+          <div class="storage-map-toolbar">
+            <button id="storage-map-up" class="storage-icon-btn" type="button" title="Go up inside scan root" aria-label="Go up inside scan root">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"></path></svg>
+            </button>
+            <div class="storage-path-wrap">
+              <span>CURRENT FOLDER</span>
+              <strong id="storage-map-path" title=""></strong>
+            </div>
+            <span id="storage-map-index-status" class="storage-index-status">INDEX READY</span>
+            <button id="storage-map-rescan" class="storage-toolbar-btn" type="button">Rescan</button>
+            <button id="storage-map-choose" class="storage-toolbar-btn accent" type="button">Choose another</button>
+          </div>
+          <div class="storage-map-summary">
+            <div><span>SIZE</span><strong id="storage-map-total">0 B</strong></div>
+            <div><span>FILES</span><strong id="storage-map-files">0</strong></div>
+            <div><span>FOLDERS</span><strong id="storage-map-folders">0</strong></div>
+            <div><span>INDEXED</span><strong id="storage-map-indexed">0</strong></div>
+            <div><span>SCAN TIME</span><strong id="storage-map-time">0s</strong></div>
+          </div>
+          <section class="storage-visual-section">
+            <div class="storage-section-heading">
+              <div><h3>SPACE MAP</h3><span id="storage-map-visual-meta">Block area represents real size</span></div>
+              <div class="storage-view-toggle" role="group" aria-label="Storage map view">
+                <button class="active" data-storage-map-view="folders" type="button" aria-pressed="true">Folder map</button>
+                <button data-storage-map-view="files" type="button" aria-pressed="false">Largest files</button>
+              </div>
+            </div>
+            <canvas id="storage-treemap" class="storage-treemap" aria-label="Visual map of the largest measured files"></canvas>
+            <div class="storage-visual-foot"><div id="storage-map-legend" class="storage-map-legend" aria-label="Storage map color legend"></div><span id="storage-map-skipped"></span></div>
+          </section>
+          <section class="storage-list-section">
+            <div class="storage-list-toolbar">
+              <div class="storage-tabs" role="tablist" aria-label="Storage results">
+                <button class="storage-tab active" data-storage-tab="children" type="button" role="tab" aria-selected="true">Folder contents</button>
+                <button class="storage-tab" data-storage-tab="largest" type="button" role="tab" aria-selected="false">Largest files</button>
+              </div>
+              <label class="storage-search">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+                <input id="storage-map-search" type="search" placeholder="Search every indexed file" autocomplete="off">
+              </label>
+            </div>
+            <div class="storage-table-head"><span></span><span>Name</span><span>Type</span><span>Modified</span><span>Size</span><span></span></div>
+            <div id="storage-map-list" class="storage-map-list"></div>
+          </section>
+        </div>
+        <footer class="storage-map-footer">
+          <div>
+            <strong id="storage-map-selection">Nothing selected</strong>
+            <span>Select only items you recognize; folder contents are included</span>
+          </div>
+          <button id="storage-map-recycle" class="storage-recycle-btn" type="button" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6"></path></svg>
+            <span id="storage-map-recycle-label">Move to Recycle Bin</span>
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <!-- Dedicated settings page for the Launch pipeline capability -->
+    <div id="launch-apps-overlay" class="launch-apps-overlay hidden" aria-hidden="true">
+      <section class="launch-apps-dialog" role="dialog" aria-modal="true" aria-labelledby="launch-apps-title">
+        <header class="launch-apps-header">
+          <div class="launch-apps-heading">
+            <span class="launch-apps-heading-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17h16M6 17V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10M9 21h6"></path><path d="m10 9 5 3-5 3z"></path></svg>
+            </span>
+            <div>
+              <h2 id="launch-apps-title">Launch applications</h2>
+              <p>Choose what should be ready when Gaming Mode activates</p>
+            </div>
+          </div>
+          <button id="launch-apps-close" class="system-details-close" type="button" aria-label="Close launch application settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+          </button>
+        </header>
+        <div class="launch-apps-safety">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          Applications start normally, without arguments or priority changes. Already-running applications are left alone.
+        </div>
+        <div id="launch-apps-content" class="launch-apps-content"></div>
+        <footer class="launch-apps-footer">
+          <div>
+            <strong>Steam stays available as the default</strong>
+            <span>You can disable it without removing it</span>
+          </div>
+          <button id="launch-apps-add" class="launch-apps-add" type="button">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
+            Add applications
+          </button>
+        </footer>
+      </section>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

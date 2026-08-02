@@ -1,0 +1,24 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Frontend output and dependencies
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# Rust output
+src-tauri/target
+src-tauri/target-*
+target
+
+# Packaged Windows artifacts
+*.exe

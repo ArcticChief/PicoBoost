@@ -1,0 +1,12 @@
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+    if let Some(exit_code) = picoboost_lib::run_storage_scan_helper_if_requested() {
+        std::process::exit(exit_code);
+    }
+    if let Some(exit_code) = picoboost_lib::run_memory_close_helper_if_requested() {
+        std::process::exit(exit_code);
+    }
+    picoboost_lib::run()
+}

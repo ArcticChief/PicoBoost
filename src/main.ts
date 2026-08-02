@@ -1,0 +1,418 @@
+import { api } from './api';
+import { Optimizer, LogLevel } from './optimizer';
+import { PRESETS, defaultOptions } from './config';
+import { BoostOptions, BoostReport, Preset } from './types';
+import { confirmDialog } from './dialogs';
+import { SystemDetailsModal } from './system-details';
+import { CleanupToolsModal } from './cleanup-tools';
+import { LaunchAppsModal } from './launch-apps';
+import { StorageMapModal } from './storage-map';
+import { MemoryToolsModal } from './memory-tools';
+
+// Orchestrator. Owns app-wide UI state (current options/preset, timers), wires
+// DOM events, and delegates the actual work to the Optimizer controller —
+// mirroring how PicoNote's `PicoNoteApp` delegates to its feature managers.
+class PicoBoostApp {
+  private optimizer!: Optimizer;
+  private options: BoostOptions = defaultOptions();
+  private preset: Preset = 'Performance';
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private closing = false;
+  private closeQueued = false;
+
+  private boostBtn!: HTMLButtonElement;
+  private ringProgress!: SVGCircleElement;
+  private consoleEl!: HTMLElement;
+
+  // Circumference of the progress ring (r = 68) for stroke-dashoffset animation.
+  private static readonly RING_LEN = 2 * Math.PI * 68;
+
+  constructor() {
+    this.optimizer = new Optimizer({
+      onLog: (msg, level) => this.log(msg, level),
+      onProgress: (f) => this.setProgress(f),
+    });
+    void this.init().catch((error) => {
+      console.error('PicoBoost initialization failed', error);
+      this.toast(`Initialization problem: ${String(error)}`);
+      void api.showWindow();
+    });
+  }
+
+  private async init(): Promise<void> {
+    this.boostBtn = document.getElementById('boost-btn') as HTMLButtonElement;
+    this.ringProgress = document.getElementById('ring-progress') as unknown as SVGCircleElement;
+    this.consoleEl = document.getElementById('console') as HTMLElement;
+
+    this.ringProgress.style.strokeDasharray = String(PicoBoostApp.RING_LEN);
+    this.setProgress(0);
+
+    this.setupTitlebar();
+    this.setupPresets();
+    this.setupToggles();
+    this.updateLaunchProfile();
+    this.applyOptionsToUI();
+    const systemDetails = new SystemDetailsModal((message) => this.toast(message));
+    new CleanupToolsModal((message) => this.toast(message));
+    new MemoryToolsModal((message) => this.toast(message));
+    new StorageMapModal((message) => this.toast(message));
+    new LaunchAppsModal(
+      (message) => this.toast(message),
+      (applications) => {
+        const enabled = applications.filter((application) => application.enabled);
+        const summary = document.getElementById('launch-apps-summary') as HTMLElement;
+        const badge = document.getElementById('launch-apps-count') as HTMLElement;
+        if (enabled.length === 0) summary.textContent = 'No applications enabled';
+        else if (enabled.length === 1) summary.textContent = enabled[0].name;
+        else summary.textContent = `${enabled[0].name} + ${enabled.length - 1} more`;
+        badge.textContent = String(enabled.length);
+      },
+    );
+
+    this.boostBtn.addEventListener('click', () => void this.onPrimaryAction());
+    document.getElementById('clear-log')?.addEventListener('click', () => {
+      this.consoleEl.replaceChildren();
+    });
+
+    // Route titlebar close, Alt+F4, and taskbar close through the same restore
+    // guard. The guarded command ultimately destroys the window directly.
+    await api.onCloseRequested((event) => {
+      event.preventDefault();
+      void this.onClose();
+    });
+
+    this.refreshSessionState();
+    await this.loadSystemInfo();
+    this.startRamPolling();
+
+    await api.showWindow();
+    // Warm the detailed snapshot after the main screen is interactive. The
+    // modal then opens from cache instead of starting visible hardware work.
+    setTimeout(() => void systemDetails.preload(), 700);
+    this.log(
+      this.optimizer.hasRestoreState()
+        ? 'A PicoBoost session is active. Press RESTORE when you finish playing.'
+        : 'PicoBoost ready. Choose a profile and press ACTIVATE.',
+      'info',
+    );
+  }
+
+  // ---- Titlebar -----------------------------------------------------------
+
+  private setupTitlebar(): void {
+    const minimize = document.getElementById('titlebar-minimize');
+    const maximize = document.getElementById('titlebar-maximize');
+    const close = document.getElementById('titlebar-close');
+    [minimize, maximize, close].forEach((button) => {
+      button?.addEventListener('pointerdown', (event) => event.stopPropagation());
+    });
+    minimize?.addEventListener('click', () => api.windowMinimize());
+    maximize?.addEventListener('click', () => api.windowToggleMaximize());
+    close?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      void this.onClose();
+    });
+  }
+
+  // ---- Presets & toggles --------------------------------------------------
+
+  private setupPresets(): void {
+    document.getElementById('preset-group')?.querySelectorAll<HTMLButtonElement>('.preset-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.preset = btn.dataset.preset as Preset;
+        this.options = { ...PRESETS[this.preset] };
+        document.querySelectorAll('.preset-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.applyOptionsToUI();
+        this.updateLaunchProfile();
+      });
+    });
+  }
+
+  private setupToggles(): void {
+    document.getElementById('toggle-list')?.querySelectorAll<HTMLInputElement>('input[data-opt]').forEach((box) => {
+      box.addEventListener('change', () => {
+        const key = box.dataset.opt as keyof BoostOptions;
+        this.options[key] = box.checked;
+        // Toggling by hand means we're no longer on a named preset.
+        document.querySelectorAll('.preset-btn').forEach((button) => button.classList.remove('active'));
+        this.updateLaunchProfile(true);
+      });
+    });
+  }
+
+  private applyOptionsToUI(): void {
+    document.querySelectorAll<HTMLInputElement>('input[data-opt]').forEach((box) => {
+      const key = box.dataset.opt as keyof BoostOptions;
+      box.checked = this.options[key];
+    });
+  }
+
+  private updateLaunchProfile(custom = false): void {
+    const enabled = Object.values(this.options).filter(Boolean).length;
+    (document.getElementById('launch-profile-name') as HTMLElement).textContent = custom ? 'Custom' : this.preset;
+    (document.getElementById('launch-profile-detail') as HTMLElement).textContent = `${enabled} session ${enabled === 1 ? 'action' : 'actions'} selected`;
+  }
+
+  // ---- System stats -------------------------------------------------------
+
+  private async loadSystemInfo(): Promise<void> {
+    try {
+      const info = await api.getSystemInfo();
+      (document.getElementById('stat-cpu') as HTMLElement).textContent = info.cpu;
+      (document.getElementById('stat-os') as HTMLElement).textContent = info.os;
+      this.renderRam(info.total_ram_mb, info.free_ram_mb);
+    } catch {
+      (document.getElementById('stat-cpu') as HTMLElement).textContent = 'Unavailable';
+    }
+  }
+
+  private startRamPolling(): void {
+    const poll = async () => {
+      try {
+        const r = await api.getRam();
+        this.renderRam(r.total_mb, r.free_mb);
+      } catch {
+        /* transient; ignore */
+      }
+    };
+    // Native memory polling is cheap, but ten seconds is plenty for a status
+    // gauge and keeps the optimizer almost idle while waiting for user input.
+    setInterval(poll, 10_000);
+  }
+
+  private renderRam(totalMb: number, freeMb: number): void {
+    const usedMb = Math.max(0, totalMb - freeMb);
+    const usedGb = (usedMb / 1024).toFixed(1);
+    const totalGb = (totalMb / 1024).toFixed(1);
+    const pct = totalMb > 0 ? Math.round((usedMb / totalMb) * 100) : 0;
+    (document.getElementById('stat-ram') as HTMLElement).textContent = `${usedGb} / ${totalGb} GB · ${pct}%`;
+    const fill = document.getElementById('ram-gauge-fill') as HTMLElement;
+    fill.style.width = `${pct}%`;
+    fill.classList.toggle('hot', pct >= 85);
+  }
+
+  // ---- Boost / restore ----------------------------------------------------
+
+  private async onPrimaryAction(): Promise<void> {
+    if (this.optimizer.hasRestoreState()) await this.onRestore();
+    else await this.onBoost();
+  }
+
+  private async onBoost(): Promise<void> {
+    if (this.optimizer.isRunning()) return;
+
+    const anyEnabled = Object.values(this.options).some(Boolean);
+    if (!anyEnabled) {
+      this.toast('Enable at least one optimization first.');
+      return;
+    }
+
+    this.setBusy(true, 'BOOSTING');
+    document.getElementById('dashboard')?.classList.add('hidden');
+    this.log('──────── ACTIVATING GAMING MODE ────────', 'step');
+
+    try {
+      const report = await this.optimizer.boost(this.options);
+      this.renderDashboard(report);
+      const windowsTuned = report.powerPlanApplied || report.gameModeEnabled || report.backgroundRecordingPaused || report.memoryBalancedProcesses > 0;
+      if (windowsTuned) {
+        this.log(`Gaming session tuned in ${(report.elapsedMs / 1000).toFixed(2)}s.`, 'ok');
+        this.log('Settings are applied. PicoBoost is not processing in the background; press RESTORE when finished.', 'info');
+        this.toast('Performance session active');
+      } else if (report.applicationsReady) {
+        this.log('Selected applications are ready; no Windows settings were changed.', 'info');
+        this.toast('Applications ready');
+      } else if (report.memoryChecked) {
+        this.log('Memory readiness checked; no global cache or process working sets were flushed.', 'info');
+        this.toast('Memory readiness checked');
+      } else {
+        this.log('No selected action could be applied.', 'warn');
+        this.toast('No changes applied');
+      }
+    } catch (e) {
+      this.log(`Boost error: ${e}`, 'warn');
+    } finally {
+      this.setBusy(false, 'ACTIVATE');
+      this.refreshSessionState();
+      this.continueQueuedClose();
+    }
+  }
+
+  private async onRestore(): Promise<void> {
+    if (this.optimizer.isRunning()) return;
+    const started = performance.now();
+    this.setBusy(true, 'RESTORING');
+    this.log('──────── RESTORING SETTINGS ────────', 'step');
+    try {
+      await this.optimizer.restore();
+      document.getElementById('dashboard')?.classList.add('hidden');
+      this.toast(`Restore complete in ${((performance.now() - started) / 1000).toFixed(2)}s — nothing remains active`);
+    } catch (e) {
+      this.log(`Restore error: ${e}`, 'warn');
+    } finally {
+      this.setBusy(false, 'ACTIVATE');
+      this.refreshSessionState();
+      this.continueQueuedClose();
+    }
+  }
+
+  private async onClose(restoreWithoutPrompt = false): Promise<void> {
+    if (this.closing) return;
+    if (this.optimizer.isRunning()) {
+      if (!this.closeQueued) {
+        this.closeQueued = true;
+        this.log('Close requested. PicoBoost will finish the current step, restore safely, and close.', 'info');
+        this.toast('Close queued — finishing safely, then PicoBoost will exit');
+      }
+      return;
+    }
+
+    this.closing = true;
+    try {
+      if (this.optimizer.hasRestoreState()) {
+        const restoreFirst = restoreWithoutPrompt || await confirmDialog(
+          'A performance session is active. Restore the original Windows settings before closing?',
+          { title: 'Restore before exit', confirmText: 'Restore & Close' },
+        );
+        if (!restoreFirst) return;
+
+        this.setBusy(true, 'RESTORING');
+        try {
+          await this.optimizer.restore();
+        } catch (e) {
+          this.log(`Close cancelled because restore is incomplete: ${e}`, 'warn');
+          this.toast('Restore incomplete — PicoBoost stayed open');
+          this.setBusy(false, 'ACTIVATE');
+          this.refreshSessionState();
+          return;
+        }
+      }
+      try {
+        await api.windowClose();
+      } catch (error) {
+        this.log(`Could not close PicoBoost: ${error}`, 'warn');
+        this.toast('PicoBoost could not close. Please try again.');
+        this.setBusy(false, 'ACTIVATE');
+        this.refreshSessionState();
+      }
+    } finally {
+      this.closing = false;
+    }
+  }
+
+  private continueQueuedClose(): void {
+    if (!this.closeQueued || this.optimizer.isRunning()) return;
+    this.closeQueued = false;
+    void this.onClose(true);
+  }
+
+  private setBusy(busy: boolean, label: string): void {
+    this.boostBtn.classList.toggle('busy', busy);
+    this.boostBtn.disabled = busy;
+    this.setProfileControlsDisabled(busy || this.optimizer.hasRestoreState());
+    (document.getElementById('boost-label') as HTMLElement).textContent = label;
+    (document.getElementById('boost-sublabel') as HTMLElement).textContent = label === 'RESTORING'
+      ? 'RETURNING TO NORMAL'
+      : busy ? 'APPLYING SAFELY' : 'SELECTED PROFILE';
+    this.boostBtn.setAttribute('aria-busy', String(busy));
+    this.boostBtn.setAttribute('aria-label', label === 'RESTORING'
+      ? 'Restoring the original Windows settings'
+      : busy ? 'Activating the selected gaming profile' : 'Activate the selected gaming profile');
+    const launchPanel = document.getElementById('launch-panel') as HTMLElement;
+    launchPanel.classList.toggle('working', busy);
+    (document.getElementById('launch-panel-title') as HTMLElement).textContent = label === 'RESTORING'
+      ? 'Restoring your original setup'
+      : busy ? 'Preparing the gaming session' : 'Ready to optimize';
+    (document.getElementById('launch-state-chip') as HTMLElement).lastChild!.textContent = label === 'RESTORING'
+      ? ' RESTORING' : busy ? ' APPLYING' : ' READY';
+    const status = document.getElementById('session-state') as HTMLElement;
+    status.classList.toggle('working', busy);
+    if (busy) {
+      (document.getElementById('session-state-text') as HTMLElement).textContent = label === 'RESTORING'
+        ? 'Restoring original Windows settings…'
+        : 'Applying selected Windows settings…';
+    }
+    if (!busy) this.setProgress(0);
+  }
+
+  private refreshSessionState(): void {
+    const active = this.optimizer.hasRestoreState();
+    const status = document.getElementById('session-state') as HTMLElement;
+    const launchPanel = document.getElementById('launch-panel') as HTMLElement;
+    status.classList.remove('working');
+    this.setProfileControlsDisabled(active);
+    this.boostBtn.classList.toggle('active', active);
+    launchPanel.classList.toggle('active', active);
+    launchPanel.classList.remove('working');
+    this.boostBtn.title = active ? 'Restore the original Windows state' : 'Activate the selected gaming profile';
+    this.boostBtn.setAttribute('aria-label', active ? 'Restore the original Windows state' : 'Activate the selected gaming profile');
+    this.boostBtn.setAttribute('aria-busy', 'false');
+    (document.getElementById('boost-label') as HTMLElement).textContent = active ? 'RESTORE' : 'ACTIVATE';
+    (document.getElementById('boost-sublabel') as HTMLElement).textContent = active ? 'END GAMING SESSION' : 'SELECTED PROFILE';
+    (document.getElementById('launch-panel-title') as HTMLElement).textContent = active ? 'Gaming session is active' : 'Ready to optimize';
+    (document.getElementById('launch-state-chip') as HTMLElement).lastChild!.textContent = active ? ' ACTIVE' : ' READY';
+    status.classList.toggle('active', active);
+    (document.getElementById('session-state-text') as HTMLElement).textContent = active
+      ? 'Settings applied · Restore when finished'
+      : 'Reversible session ready';
+  }
+
+  private setProfileControlsDisabled(disabled: boolean): void {
+    document.querySelectorAll<HTMLButtonElement>('.preset-btn').forEach((button) => {
+      button.disabled = disabled;
+    });
+    document.querySelectorAll<HTMLInputElement>('input[data-opt]').forEach((input) => {
+      input.disabled = disabled;
+    });
+    document.querySelectorAll<HTMLButtonElement>('.tuning-config-btn').forEach((button) => {
+      button.disabled = disabled;
+    });
+  }
+
+  // ---- Rendering helpers --------------------------------------------------
+
+  private setProgress(fraction: number): void {
+    const offset = PicoBoostApp.RING_LEN * (1 - Math.max(0, Math.min(1, fraction)));
+    this.ringProgress.style.strokeDashoffset = String(offset);
+  }
+
+  private renderDashboard(r: BoostReport): void {
+    const set = (id: string, v: string) => ((document.getElementById(id) as HTMLElement).textContent = v);
+    set('d-time', `${(r.elapsedMs / 1000).toFixed(1)}s`);
+    set('d-power', r.powerPlanApplied ? 'High' : 'Kept');
+    set('d-game-mode', r.gameModeEnabled ? 'On' : 'Kept');
+    set('d-recording', r.backgroundRecordingPaused ? 'Paused' : 'Kept');
+    set('d-memory', r.memoryBalancedProcesses ? `${r.memoryBalancedApps}/${r.memoryBalancedProcesses}` : 'Ready');
+    const launchValue = r.applicationsRequested
+      ? `${r.applicationsReady}/${r.applicationsRequested}`
+      : 'Kept';
+    set('d-launch', launchValue);
+    document.getElementById('dashboard')?.classList.remove('hidden');
+  }
+
+  private log(message: string, level: LogLevel): void {
+    const line = document.createElement('div');
+    line.className = `log-line ${level}`;
+    const time = new Date().toLocaleTimeString([], { hour12: false });
+    const timeElement = document.createElement('span');
+    timeElement.className = 'log-time';
+    timeElement.textContent = time;
+    const messageElement = document.createElement('span');
+    messageElement.className = 'log-msg';
+    messageElement.textContent = message;
+    line.append(timeElement, messageElement);
+    this.consoleEl.appendChild(line);
+    this.consoleEl.scrollTop = this.consoleEl.scrollHeight;
+  }
+
+  private toast(message: string): void {
+    const el = document.getElementById('app-toast') as HTMLElement;
+    (document.getElementById('app-toast-text') as HTMLElement).textContent = message;
+    el.classList.remove('hidden');
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => el.classList.add('hidden'), 2600);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => new PicoBoostApp());
