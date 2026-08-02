@@ -5,9 +5,9 @@ Tauri 2, Rust, TypeScript, and vanilla CSS. It applies a small set of reversible
 Windows changes before a game session and restores the recorded state when the
 session ends.
 
-PicoBoost is designed around predictable, user-visible actions. It does not stop
-Explorer, stop Windows services, purge caches, or terminate applications during
-activation.
+PicoBoost combines reversible gaming-session profiles with focused tools for
+memory readiness, system cleanup, hardware status, application launching, and
+visual storage analysis.
 
 ## Gaming-session workflow
 
