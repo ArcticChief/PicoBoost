@@ -169,6 +169,81 @@ html, body {
 .machine-open-hint svg { transition: transform 0.18s ease; }
 .machine-card:hover .machine-open-hint svg { transform: translateX(2px); }
 
+/* ---- Display dimmer ------------------------------------------------------ */
+
+.display-dimmer {
+  margin-top: 10px;
+  padding: 9px 10px 8px;
+  border: 1px solid rgba(35, 42, 61, 0.9);
+  border-radius: 10px;
+  background: rgba(20, 24, 38, 0.76);
+}
+.display-dimmer-head {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+.display-dimmer-icon {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid rgba(129, 140, 248, 0.15);
+  border-radius: 7px;
+  background: rgba(99, 102, 241, 0.06);
+  color: #858fdd;
+}
+.display-dimmer-copy { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
+.display-dimmer-copy strong { color: #bcc5d4; font-size: 10px; font-weight: 650; }
+.display-dimmer-copy small { overflow: hidden; color: var(--text-faint); font-size: 7.5px; text-overflow: ellipsis; white-space: nowrap; }
+#display-brightness-value {
+  min-width: 30px;
+  color: #a5adff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: right;
+}
+.display-dimmer-control {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  color: #5f6b82;
+}
+#display-brightness-slider {
+  --brightness-progress: 50%;
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  border-radius: 999px;
+  outline: none;
+  background: linear-gradient(90deg, #7782e8 0 var(--brightness-progress), #252c40 var(--brightness-progress) 100%);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+#display-brightness-slider::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #c1c6ff;
+  border-radius: 50%;
+  background: #747ee0;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1), 0 1px 4px rgba(0,0,0,0.4);
+  cursor: grab;
+  appearance: none;
+  -webkit-appearance: none;
+}
+#display-brightness-slider:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(1.08); }
+#display-brightness-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.28); }
+#display-brightness-slider:disabled { opacity: 0.38; cursor: default; }
+#display-brightness-slider:disabled::-webkit-slider-thumb { cursor: default; }
+.display-dimmer.adjusting .display-dimmer-icon { color: #a7aeff; animation: status-working 0.8s ease-in-out infinite alternate; }
+.display-dimmer.unsupported { border-color: rgba(100, 116, 139, 0.16); }
+.display-dimmer.unsupported #display-brightness-value { color: var(--text-faint); }
+
 /* ---- Performance session tuning ----------------------------------------- */
 
 .panel-section-title {
@@ -930,6 +1005,7 @@ html, body {
   white-space: nowrap;
 }
 .details-power-plan { color: var(--accent); }
+.details-memory-title { color: #c4cbff; }
 .details-memory-gauge {
   height: 5px;
   margin: 10px 0;
@@ -949,6 +1025,7 @@ html, body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
+.details-memory-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 8px; }
 .details-summary-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .details-summary-item small { color: var(--text-faint); font-size: 8.5px; }
 .details-summary-item b {

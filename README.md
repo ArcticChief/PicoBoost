@@ -6,8 +6,8 @@ Windows changes before a game session and restores the recorded state when the
 session ends.
 
 PicoBoost combines one configurable performance session with focused tools for
-memory readiness, system cleanup, hardware status, application launching, and
-visual storage analysis.
+memory readiness, display brightness, system cleanup, hardware status,
+application launching, and visual storage analysis.
 
 ## Gaming-session workflow
 
@@ -25,6 +25,17 @@ Every reversible change is checkpointed as soon as it is made. If one restore
 step fails, the remaining snapshot is kept so restoration can be attempted
 again. Steam is included as the default launch choice, and users can add,
 order, enable, or disable their own Windows executables.
+
+## Display brightness
+
+The compact brightness slider controls all monitors that expose hardware
+brightness control to Windows. Desktop displays use DDC/CI and laptop panels
+use the Windows WMI brightness provider when needed. The row reports how many
+connected displays are linked; unsupported monitors are left untouched rather
+than being darkened with a software overlay or altered gamma profile.
+
+Brightness is a direct display preference, independent of Gaming Mode, so it
+applies immediately and is not changed by Activate or Restore.
 
 ## Memory Readiness
 
@@ -52,7 +63,8 @@ The system-status card opens a focused hardware view containing:
   when a supported sensor source is available.
 - Full GPU names, driver versions, VRAM, utilization, and temperature when
   supported by the installed driver tooling.
-- Installed and available memory, Windows build, and active power plan.
+- Installed and available memory, DDR generation, configured memory speed,
+  module count, Windows build, and active power plan.
 - Click-to-copy CPU and GPU names.
 
 Hardware telemetry is preloaded after the main window becomes interactive so

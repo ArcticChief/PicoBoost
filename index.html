@@ -24,7 +24,7 @@
         <svg class="titlebar-logo" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
         <span class="titlebar-title">PicoBoost</span>
       </div>
-      <div class="titlebar-center" data-tauri-drag-region>Gaming Mode Optimizer · v2.5.0</div>
+      <div class="titlebar-center" data-tauri-drag-region>Gaming Mode Optimizer · v2.5.1</div>
       <div class="titlebar-controls">
         <button id="titlebar-minimize" class="titlebar-btn" type="button" title="Minimize" aria-label="Minimize PicoBoost">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -60,6 +60,24 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
           </div>
         </div>
+
+        <section class="display-dimmer" aria-labelledby="display-dimmer-title">
+          <header class="display-dimmer-head">
+            <span class="display-dimmer-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg>
+            </span>
+            <span class="display-dimmer-copy">
+              <strong id="display-dimmer-title">Screen brightness</strong>
+              <small id="display-brightness-status">Reading connected displays…</small>
+            </span>
+            <output id="display-brightness-value" for="display-brightness-slider">—</output>
+          </header>
+          <div class="display-dimmer-control">
+            <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4 12H2M22 12h-2"></path></svg>
+            <input id="display-brightness-slider" type="range" min="0" max="100" step="1" value="50" disabled aria-label="Brightness for all supported screens" aria-describedby="display-brightness-status">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg>
+          </div>
+        </section>
 
         <div class="performance-mode-banner">
           <span class="performance-mode-icon" aria-hidden="true">

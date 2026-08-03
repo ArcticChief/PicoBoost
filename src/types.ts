@@ -13,6 +13,16 @@ export interface RamInfo {
   free_mb: number;
 }
 
+export interface DisplayBrightnessInfo {
+  brightness_percent: number;
+  supported_monitors: number;
+  total_monitors: number;
+}
+
+export interface DisplayBrightnessResult extends DisplayBrightnessInfo {
+  updated_monitors: number;
+}
+
 export interface MemoryProcess {
   pid: number;
   name: string;
@@ -93,7 +103,8 @@ export interface MemoryDetails {
   total_mb: number;
   available_mb: number;
   module_count: number;
-  speed_mhz: number | null;
+  memory_type: string;
+  configured_speed_mt_s: number | null;
 }
 
 export interface SystemDetails {

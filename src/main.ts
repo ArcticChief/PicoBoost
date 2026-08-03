@@ -16,6 +16,9 @@ class PicoBoostApp {
   private optimizer!: Optimizer;
   private options: BoostOptions = defaultOptions();
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private brightnessTimer: ReturnType<typeof setTimeout> | null = null;
+  private brightnessQueued: number | null = null;
+  private brightnessApplying = false;
   private closing = false;
   private closeQueued = false;
 
@@ -50,6 +53,7 @@ class PicoBoostApp {
     this.setupToggles();
     this.updateSessionSummary();
     this.applyOptionsToUI();
+    void this.setupDisplayBrightness();
     const systemDetails = new SystemDetailsModal((message) => this.toast(message));
     new CleanupToolsModal((message) => this.toast(message));
     new MemoryToolsModal(
@@ -186,6 +190,87 @@ class PicoBoostApp {
     const fill = document.getElementById('ram-gauge-fill') as HTMLElement;
     fill.style.width = `${pct}%`;
     fill.classList.toggle('hot', pct >= 85);
+  }
+
+  // ---- Display brightness ------------------------------------------------
+
+  private async setupDisplayBrightness(): Promise<void> {
+    const card = document.querySelector('.display-dimmer') as HTMLElement;
+    const slider = document.getElementById('display-brightness-slider') as HTMLInputElement;
+    const status = document.getElementById('display-brightness-status') as HTMLElement;
+
+    slider.addEventListener('input', () => {
+      const percent = Number(slider.value);
+      this.renderBrightness(percent);
+      if (this.brightnessTimer) clearTimeout(this.brightnessTimer);
+      this.brightnessTimer = setTimeout(() => this.queueBrightnessApply(percent), 160);
+    });
+    slider.addEventListener('change', () => {
+      if (this.brightnessTimer) {
+        clearTimeout(this.brightnessTimer);
+        this.brightnessTimer = null;
+      }
+      this.queueBrightnessApply(Number(slider.value));
+    });
+
+    try {
+      const info = await api.getDisplayBrightness();
+      slider.value = String(info.brightness_percent);
+      this.renderBrightness(info.brightness_percent);
+      if (info.supported_monitors > 0) {
+        slider.disabled = false;
+        status.textContent = monitorSupportText(info.supported_monitors, info.total_monitors);
+      } else {
+        card.classList.add('unsupported');
+        status.textContent = info.total_monitors
+          ? 'Hardware brightness control is unavailable'
+          : 'No connected display was detected';
+      }
+    } catch {
+      card.classList.add('unsupported');
+      status.textContent = 'Brightness control is unavailable';
+      (document.getElementById('display-brightness-value') as HTMLOutputElement).textContent = '—';
+    }
+  }
+
+  private renderBrightness(percent: number): void {
+    const bounded = Math.max(0, Math.min(100, Math.round(percent)));
+    const slider = document.getElementById('display-brightness-slider') as HTMLInputElement;
+    slider.style.setProperty('--brightness-progress', `${bounded}%`);
+    slider.setAttribute('aria-valuetext', `${bounded}% brightness`);
+    (document.getElementById('display-brightness-value') as HTMLOutputElement).textContent = `${bounded}%`;
+  }
+
+  private queueBrightnessApply(percent: number): void {
+    this.brightnessQueued = Math.max(0, Math.min(100, Math.round(percent)));
+    if (!this.brightnessApplying) void this.flushBrightnessQueue();
+  }
+
+  private async flushBrightnessQueue(): Promise<void> {
+    const card = document.querySelector('.display-dimmer') as HTMLElement;
+    const status = document.getElementById('display-brightness-status') as HTMLElement;
+    this.brightnessApplying = true;
+    card.classList.add('adjusting');
+    try {
+      while (this.brightnessQueued !== null) {
+        const percent = this.brightnessQueued;
+        this.brightnessQueued = null;
+        status.textContent = `Adjusting supported displays to ${percent}%…`;
+        try {
+          const result = await api.setDisplayBrightness(percent);
+          status.textContent = result.updated_monitors > 0
+            ? `${result.updated_monitors} ${result.updated_monitors === 1 ? 'display' : 'displays'} set to ${result.brightness_percent}%`
+            : 'No display accepted the brightness change';
+        } catch (error) {
+          status.textContent = 'Brightness change could not be applied';
+          this.toast(`Brightness unavailable: ${String(error)}`);
+        }
+      }
+    } finally {
+      card.classList.remove('adjusting');
+      this.brightnessApplying = false;
+      if (this.brightnessQueued !== null) void this.flushBrightnessQueue();
+    }
   }
 
   // ---- Boost / restore ----------------------------------------------------
@@ -406,6 +491,11 @@ class PicoBoostApp {
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => el.classList.add('hidden'), 2600);
   }
+}
+
+function monitorSupportText(supported: number, total: number): string {
+  if (supported === total) return `${supported} ${supported === 1 ? 'display' : 'displays'} linked`;
+  return `${supported} of ${total} displays linked`;
 }
 
 document.addEventListener('DOMContentLoaded', () => new PicoBoostApp());

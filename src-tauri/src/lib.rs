@@ -93,6 +93,21 @@ pub struct RamInfo {
     pub free_mb: u64,
 }
 
+#[derive(Debug, Serialize)]
+pub struct DisplayBrightnessInfo {
+    pub brightness_percent: u32,
+    pub supported_monitors: u32,
+    pub total_monitors: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DisplayBrightnessResult {
+    pub brightness_percent: u32,
+    pub updated_monitors: u32,
+    pub supported_monitors: u32,
+    pub total_monitors: u32,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MemoryProcess {
     pub pid: u32,
@@ -183,7 +198,8 @@ pub struct MemoryDetails {
     pub total_mb: u64,
     pub available_mb: u64,
     pub module_count: u32,
-    pub speed_mhz: Option<u32>,
+    pub memory_type: String,
+    pub configured_speed_mt_s: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -467,6 +483,250 @@ fn get_system_info() -> Result<SystemInfo, String> {
 fn get_ram() -> Result<RamInfo, String> {
     let (total_mb, free_mb) = memory_megabytes()?;
     Ok(RamInfo { total_mb, free_mb })
+}
+
+#[cfg(windows)]
+struct PhysicalMonitorBatches {
+    batches: Vec<Vec<windows_sys::Win32::Devices::Display::PHYSICAL_MONITOR>>,
+    logical_count: u32,
+}
+
+#[cfg(windows)]
+impl Drop for PhysicalMonitorBatches {
+    fn drop(&mut self) {
+        use windows_sys::Win32::Devices::Display::DestroyPhysicalMonitors;
+        for batch in &self.batches {
+            if !batch.is_empty() {
+                // SAFETY: Every handle came from GetPhysicalMonitorsFromHMONITOR,
+                // remains owned by this batch, and is destroyed exactly once here.
+                unsafe { DestroyPhysicalMonitors(batch.len() as u32, batch.as_ptr()) };
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+fn physical_monitor_batches() -> Result<PhysicalMonitorBatches, String> {
+    use windows_sys::core::BOOL;
+    use windows_sys::Win32::Devices::Display::{
+        GetNumberOfPhysicalMonitorsFromHMONITOR, GetPhysicalMonitorsFromHMONITOR, PHYSICAL_MONITOR,
+    };
+    use windows_sys::Win32::Foundation::{LPARAM, RECT};
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, HDC, HMONITOR};
+
+    unsafe extern "system" fn collect_monitor(
+        monitor: HMONITOR,
+        _dc: HDC,
+        _rect: *mut RECT,
+        data: LPARAM,
+    ) -> BOOL {
+        // SAFETY: EnumDisplayMonitors receives the live Vec pointer below and
+        // invokes this callback synchronously before that Vec leaves scope.
+        unsafe { (&mut *(data as *mut Vec<HMONITOR>)).push(monitor) };
+        1
+    }
+
+    let mut logical = Vec::<HMONITOR>::new();
+    // SAFETY: The callback and data pointer remain valid for this synchronous
+    // enumeration. Null HDC/clip rectangle request every desktop monitor.
+    let enumerated = unsafe {
+        EnumDisplayMonitors(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            Some(collect_monitor),
+            &mut logical as *mut Vec<HMONITOR> as LPARAM,
+        )
+    };
+    if enumerated == 0 {
+        return Err("Windows could not enumerate the connected displays".into());
+    }
+
+    let logical_count = logical.len() as u32;
+    let mut batches = Vec::new();
+    for monitor in logical {
+        let mut count = 0u32;
+        // SAFETY: `monitor` was produced by EnumDisplayMonitors and `count` is a
+        // valid output pointer for the duration of the call.
+        if unsafe { GetNumberOfPhysicalMonitorsFromHMONITOR(monitor, &mut count) } == 0
+            || count == 0
+        {
+            continue;
+        }
+        let mut physical = vec![PHYSICAL_MONITOR::default(); count as usize];
+        // SAFETY: The vector has exactly `count` initialized writable entries.
+        if unsafe { GetPhysicalMonitorsFromHMONITOR(monitor, count, physical.as_mut_ptr()) } != 0 {
+            batches.push(physical);
+        }
+    }
+    Ok(PhysicalMonitorBatches {
+        batches,
+        logical_count,
+    })
+}
+
+fn brightness_percent(minimum: u32, current: u32, maximum: u32) -> u32 {
+    if maximum <= minimum {
+        return 0;
+    }
+    let bounded = current.clamp(minimum, maximum);
+    (((bounded - minimum) as u64 * 100) / (maximum - minimum) as u64) as u32
+}
+
+fn brightness_value(minimum: u32, maximum: u32, percent: u32) -> u32 {
+    if maximum <= minimum {
+        return minimum;
+    }
+    minimum + (((maximum - minimum) as u64 * percent.min(100) as u64) / 100) as u32
+}
+
+#[cfg(windows)]
+fn wmi_display_brightness() -> Option<(u32, u32)> {
+    let raw = ps("$items=@(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction SilentlyContinue); if($items.Count -gt 0){ $average=[Math]::Round(($items | Measure-Object -Property CurrentBrightness -Average).Average); Write-Output (\"$average|$($items.Count)\") }").ok()?;
+    let line = raw.lines().last()?;
+    let mut fields = line.split('|');
+    let percent = fields.next()?.trim().parse::<u32>().ok()?.min(100);
+    let count = fields.next()?.trim().parse::<u32>().ok()?;
+    (count > 0).then_some((percent, count))
+}
+
+#[cfg(windows)]
+fn set_wmi_display_brightness(percent: u32) -> u32 {
+    let script = format!(
+        "$updated=0; $items=@(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods -ErrorAction SilentlyContinue); foreach($item in $items){{ try {{ $result=Invoke-CimMethod -InputObject $item -MethodName WmiSetBrightness -Arguments @{{ Timeout=[uint32]0; Brightness=[byte]{percent} }} -ErrorAction Stop; if($result.ReturnValue -eq 0){{ $updated++ }} }} catch {{ }} }}; Write-Output $updated"
+    );
+    ps(&script)
+        .ok()
+        .and_then(|raw| raw.lines().last()?.trim().parse::<u32>().ok())
+        .unwrap_or(0)
+}
+
+#[cfg(windows)]
+fn get_display_brightness_impl() -> Result<DisplayBrightnessInfo, String> {
+    use windows_sys::Win32::Devices::Display::GetMonitorBrightness;
+
+    let monitors = physical_monitor_batches()?;
+    let physical_count = monitors.batches.iter().map(Vec::len).sum::<usize>() as u32;
+    let total_monitors = physical_count.max(monitors.logical_count);
+    let mut supported = 0u32;
+    let mut percent_total = 0u64;
+    for monitor in monitors.batches.iter().flatten() {
+        let mut minimum = 0u32;
+        let mut current = 0u32;
+        let mut maximum = 0u32;
+        // SAFETY: The physical monitor handle is owned by `monitors`; all
+        // output pointers are valid until the call returns.
+        if unsafe {
+            GetMonitorBrightness(
+                monitor.hPhysicalMonitor,
+                &mut minimum,
+                &mut current,
+                &mut maximum,
+            )
+        } != 0
+            && maximum > minimum
+        {
+            supported += 1;
+            percent_total += brightness_percent(minimum, current, maximum) as u64;
+        }
+    }
+
+    let mut total_monitors = total_monitors;
+    if supported < total_monitors || total_monitors == 0 {
+        if let Some((percent, count)) = wmi_display_brightness() {
+            total_monitors = total_monitors.max(count);
+            let additional = count.min(total_monitors.saturating_sub(supported));
+            percent_total += percent as u64 * additional as u64;
+            supported += additional;
+        }
+    }
+    Ok(DisplayBrightnessInfo {
+        brightness_percent: if supported > 0 {
+            (percent_total / supported as u64) as u32
+        } else {
+            50
+        },
+        supported_monitors: supported,
+        total_monitors,
+    })
+}
+
+#[cfg(not(windows))]
+fn get_display_brightness_impl() -> Result<DisplayBrightnessInfo, String> {
+    Err("Display brightness control is available on Windows only".into())
+}
+
+#[cfg(windows)]
+fn set_display_brightness_impl(percent: u32) -> Result<DisplayBrightnessResult, String> {
+    use windows_sys::Win32::Devices::Display::{GetMonitorBrightness, SetMonitorBrightness};
+
+    let requested = percent.min(100);
+    let monitors = physical_monitor_batches()?;
+    let physical_count = monitors.batches.iter().map(Vec::len).sum::<usize>() as u32;
+    let mut total_monitors = physical_count.max(monitors.logical_count);
+    let mut supported = 0u32;
+    let mut updated = 0u32;
+    for monitor in monitors.batches.iter().flatten() {
+        let mut minimum = 0u32;
+        let mut current = 0u32;
+        let mut maximum = 0u32;
+        // SAFETY: The physical monitor handle is valid and owned by `monitors`.
+        if unsafe {
+            GetMonitorBrightness(
+                monitor.hPhysicalMonitor,
+                &mut minimum,
+                &mut current,
+                &mut maximum,
+            )
+        } != 0
+            && maximum > minimum
+        {
+            supported += 1;
+            let value = brightness_value(minimum, maximum, requested);
+            // SAFETY: `value` is clamped to the range reported by this handle.
+            if unsafe { SetMonitorBrightness(monitor.hPhysicalMonitor, value) } != 0 {
+                updated += 1;
+            }
+        }
+    }
+
+    if supported < total_monitors || total_monitors == 0 {
+        let wmi_updated = set_wmi_display_brightness(requested);
+        if wmi_updated > 0 {
+            total_monitors = total_monitors.max(wmi_updated);
+            let additional = wmi_updated.min(total_monitors.saturating_sub(supported));
+            supported += additional;
+            updated += additional;
+        }
+    }
+    Ok(DisplayBrightnessResult {
+        brightness_percent: requested,
+        updated_monitors: updated,
+        supported_monitors: supported,
+        total_monitors,
+    })
+}
+
+#[cfg(not(windows))]
+fn set_display_brightness_impl(_percent: u32) -> Result<DisplayBrightnessResult, String> {
+    Err("Display brightness control is available on Windows only".into())
+}
+
+/// Reads the average hardware brightness across every monitor Windows can
+/// control. DDC/CI is used for desktop displays; WMI covers laptop panels.
+#[tauri::command]
+async fn get_display_brightness() -> Result<DisplayBrightnessInfo, String> {
+    tauri::async_runtime::spawn_blocking(get_display_brightness_impl)
+        .await
+        .map_err(|error| format!("Brightness worker stopped: {error}"))?
+}
+
+/// Applies one normalized percentage to every controllable monitor. Unsupported
+/// monitors are left untouched instead of falling back to a fake gamma overlay.
+#[tauri::command]
+async fn set_display_brightness(percent: u32) -> Result<DisplayBrightnessResult, String> {
+    tauri::async_runtime::spawn_blocking(move || set_display_brightness_impl(percent))
+        .await
+        .map_err(|error| format!("Brightness worker stopped: {error}"))?
 }
 
 #[cfg(windows)]
@@ -1580,6 +1840,24 @@ foreach ($gpu in $gpuDevices) {
 }
 
 $moduleSpeed = $memoryModules | Where-Object { $_.ConfiguredClockSpeed } | Select-Object -ExpandProperty ConfiguredClockSpeed -First 1
+$memoryTypeCode = $memoryModules | Where-Object { $_.SMBIOSMemoryType -and $_.SMBIOSMemoryType -ne 2 } | Select-Object -ExpandProperty SMBIOSMemoryType -First 1
+if (-not $memoryTypeCode) {
+  $memoryTypeCode = $memoryModules | Where-Object { $_.MemoryType -and $_.MemoryType -ne 2 } | Select-Object -ExpandProperty MemoryType -First 1
+}
+$memoryType = switch ([uint32]$memoryTypeCode) {
+  20 { 'DDR' }
+  21 { 'DDR2' }
+  22 { 'DDR2 FB-DIMM' }
+  24 { 'DDR3' }
+  26 { 'DDR4' }
+  27 { 'LPDDR' }
+  28 { 'LPDDR2' }
+  29 { 'LPDDR3' }
+  30 { 'LPDDR4' }
+  34 { 'DDR5' }
+  35 { 'LPDDR5' }
+  default { 'Not reported' }
+}
 $powerOutput = @(powercfg /getactivescheme 2>$null)
 $powerPlan = 'Not reported'
 if (($powerOutput -join ' ') -match '\((.+)\)') { $powerPlan = $Matches[1] }
@@ -1607,7 +1885,8 @@ $sensorStatus = if ($sensorProvider -and $nvidiaRows.Count -gt 0) {
     total_mb = [uint64]0
     available_mb = [uint64]0
     module_count = [uint32]$memoryModules.Count
-    speed_mhz = if ($moduleSpeed) { [uint32]$moduleSpeed } else { $null }
+    memory_type = $memoryType
+    configured_speed_mt_s = if ($moduleSpeed) { [uint32]$moduleSpeed } else { $null }
   }
   os_name = if ($os.Caption) { [string]$os.Caption } else { 'Windows' }
   os_build = if ($os.BuildNumber) { [string]$os.BuildNumber } else { 'Not reported' }
@@ -3915,6 +4194,8 @@ pub fn run() {
             get_system_info,
             get_system_details,
             get_ram,
+            get_display_brightness,
+            set_display_brightness,
             get_memory_snapshot,
             close_memory_apps,
             close_memory_apps_elevated,
@@ -4013,6 +4294,25 @@ mod tests {
         assert!(valid_guid("CE7F7CF4-35CA-4C0D-BF54-85B9A6E822D6"));
         assert!(!valid_guid("8c5e7fdae8bf-4a96-9a85-a6e23a8c635c-"));
         assert!(!valid_guid("'; Remove-Item C:\\bad; #----------"));
+    }
+
+    #[test]
+    fn brightness_percentages_respect_monitor_ranges() {
+        assert_eq!(brightness_percent(20, 60, 100), 50);
+        assert_eq!(brightness_percent(20, 0, 100), 0);
+        assert_eq!(brightness_percent(20, 150, 100), 100);
+        assert_eq!(brightness_value(20, 100, 0), 20);
+        assert_eq!(brightness_value(20, 100, 50), 60);
+        assert_eq!(brightness_value(20, 100, 100), 100);
+        assert_eq!(brightness_value(20, 100, 150), 100);
+    }
+
+    #[test]
+    fn reads_display_brightness_capability_without_changing_it() {
+        let info = get_display_brightness_impl()
+            .expect("connected display capability query should complete");
+        assert!(info.brightness_percent <= 100);
+        assert!(info.supported_monitors <= info.total_monitors);
     }
 
     #[test]
@@ -4138,6 +4438,7 @@ mod tests {
         assert!(details.cpu.physical_cores > 0);
         assert!(details.cpu.logical_processors >= details.cpu.physical_cores);
         assert!(details.memory.total_mb > 0);
+        assert!(!details.memory.memory_type.trim().is_empty());
     }
 
     #[test]

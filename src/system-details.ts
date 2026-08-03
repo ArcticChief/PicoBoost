@@ -236,24 +236,31 @@ export class SystemDetailsModal {
   }
 
   private memoryCard(details: SystemDetails): HTMLElement {
-    const { total_mb: total, available_mb: available, module_count: modules, speed_mhz: speed } = details.memory;
+    const {
+      total_mb: total,
+      available_mb: available,
+      module_count: modules,
+      memory_type: memoryType,
+      configured_speed_mt_s: speed,
+    } = details.memory;
     const used = Math.max(0, total - available);
     const percent = total > 0 ? Math.round((used / total) * 100) : 0;
     const card = el('article', 'details-summary-card');
     card.append(
       el('span', 'details-summary-label', 'MEMORY'),
-      el('strong', 'details-summary-value', `${gb(used)} / ${gb(total)} GB`),
+      el('strong', 'details-summary-value details-memory-title', `${memoryType} · ${gb(total)} GB installed`),
     );
     const gauge = el('div', 'details-memory-gauge');
     const fill = el('span', `details-memory-fill${percent >= 85 ? ' hot' : ''}`);
     fill.style.width = `${percent}%`;
     gauge.appendChild(fill);
     card.appendChild(gauge);
-    const meta = el('div', 'details-summary-meta');
+    const meta = el('div', 'details-summary-meta details-memory-meta');
     meta.append(
+      summaryItem('In use', `${gb(used)} GB`),
       summaryItem('Available', `${gb(available)} GB`),
       summaryItem('Modules', String(modules)),
-      summaryItem('Speed', speed ? `${speed} MT/s` : 'Not reported'),
+      summaryItem('Configured speed', speed ? `${speed} MT/s` : 'Not reported'),
     );
     card.appendChild(meta);
     return card;

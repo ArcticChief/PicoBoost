@@ -4,6 +4,8 @@ import {
   SystemInfo,
   SystemDetails,
   RamInfo,
+  DisplayBrightnessInfo,
+  DisplayBrightnessResult,
   MemorySnapshot,
   MemoryProcess,
   MemoryCloseResult,
@@ -56,6 +58,14 @@ export const api = {
 
   getRam: async (): Promise<RamInfo> => {
     return await invoke<RamInfo>('get_ram');
+  },
+
+  getDisplayBrightness: async (): Promise<DisplayBrightnessInfo> => {
+    return await invoke<DisplayBrightnessInfo>('get_display_brightness');
+  },
+
+  setDisplayBrightness: async (percent: number): Promise<DisplayBrightnessResult> => {
+    return await invoke<DisplayBrightnessResult>('set_display_brightness', { percent });
   },
 
   getMemorySnapshot: async (): Promise<MemorySnapshot> => {

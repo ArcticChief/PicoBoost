@@ -1,6 +1,6 @@
 [package]
 name = "picoboost"
-version = "2.5.0"
+version = "2.5.1"
 description = "PicoBoost Gaming Mode Optimizer"
 authors = ["you"]
 edition = "2021"
@@ -26,4 +26,4 @@ ntfs-reader = "0.4.5"
 tauri-plugin-dialog = "2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Devices_Display", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
