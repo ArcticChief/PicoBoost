@@ -200,8 +200,6 @@ export interface StorageRecycleResult {
   scan: StorageScanResult;
 }
 
-export type Preset = 'Performance' | 'Balanced' | 'Minimal';
-
 export interface RegistryDwordState {
   existed: boolean;
   value: number | null;

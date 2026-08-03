@@ -24,7 +24,7 @@
         <svg class="titlebar-logo" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
         <span class="titlebar-title">PicoBoost</span>
       </div>
-      <div class="titlebar-center" data-tauri-drag-region>Gaming Mode Optimizer · v2.4.3</div>
+      <div class="titlebar-center" data-tauri-drag-region>Gaming Mode Optimizer · v2.5.0</div>
       <div class="titlebar-controls">
         <button id="titlebar-minimize" class="titlebar-btn" type="button" title="Minimize" aria-label="Minimize PicoBoost">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -39,7 +39,7 @@
     </div>
 
     <div id="app-body">
-      <!-- Left column: system stats + presets + feature toggles -->
+      <!-- Left column: system stats + performance-session tuning -->
       <div id="control-panel">
         <div id="system-card" class="machine-card" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="system-details-overlay" title="Open focused system details">
           <div class="machine-row">
@@ -61,34 +61,75 @@
           </div>
         </div>
 
-        <div class="panel-section-title">PRESET</div>
-        <div id="preset-group" class="preset-group">
-          <button class="preset-btn active" data-preset="Performance">Performance</button>
-          <button class="preset-btn" data-preset="Balanced">Balanced</button>
-          <button class="preset-btn" data-preset="Minimal">Minimal</button>
+        <div class="performance-mode-banner">
+          <span class="performance-mode-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          </span>
+          <span class="performance-mode-copy">
+            <small>PERFORMANCE MODE</small>
+            <strong>One focused session</strong>
+            <span>Fine-tune exactly what Performance Mode applies.</span>
+          </span>
+          <span class="performance-mode-state"><i></i> DEFAULT</span>
         </div>
 
-        <div class="panel-section-title">SESSION TUNING</div>
+        <div class="panel-section-title tuning-title"><span>SESSION TUNING</span><span id="tuning-active-count">4 ACTIVE</span></div>
         <div id="toggle-list" class="toggle-list">
-          <label class="toggle-card"><input type="checkbox" data-opt="memoryReadiness"><span class="tg-name">🧠 Memory Readiness</span><span class="tg-desc">Checks real pressure; never flushes cache</span></label>
-          <label class="toggle-card"><input type="checkbox" data-opt="powerPlan"><span class="tg-name">⚡ Performance Power</span><span class="tg-desc">High Performance until Restore</span></label>
-          <label class="toggle-card"><input type="checkbox" data-opt="gameMode"><span class="tg-name">🎯 Windows Game Mode</span><span class="tg-desc">Prioritize game workloads</span></label>
-          <label class="toggle-card"><input type="checkbox" data-opt="pauseBackgroundRecording"><span class="tg-name">⏺️ Pause Replay Buffer</span><span class="tg-desc">Manual captures stay available</span></label>
-          <div class="toggle-card tuning-card">
-            <label class="tuning-toggle-label">
-              <input type="checkbox" data-opt="launchApplications">
-              <span class="tg-name">🚀 Launch Applications</span>
-              <span id="launch-apps-summary" class="tg-desc">Steam</span>
+          <section class="tuning-group" aria-labelledby="windows-tuning-title">
+            <header class="tuning-group-head"><div><strong id="windows-tuning-title">Windows performance</strong><span>Power and foreground scheduling</span></div><span class="tuning-group-tag">CORE</span></header>
+            <label class="toggle-card tuning-option">
+              <input type="checkbox" data-opt="powerPlan">
+              <span class="tuning-switch" aria-hidden="true"><i></i></span>
+              <span class="tuning-copy"><span class="tg-name">Performance power</span><span class="tg-desc">High Performance until Restore</span></span>
+              <span class="tuning-scope">POWER</span>
             </label>
-            <button id="launch-apps-configure" class="tuning-config-btn" type="button" aria-haspopup="dialog" aria-controls="launch-apps-overlay" title="Configure launch applications">
-              <span id="launch-apps-count" class="tuning-config-count">1</span>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.12.37.33.7.6 1 .3.27.68.41 1.1.4h.09v4h-.09a1.7 1.7 0 0 0-1.7.6z"></path></svg>
-            </button>
-          </div>
+            <label class="toggle-card tuning-option">
+              <input type="checkbox" data-opt="gameMode">
+              <span class="tuning-switch" aria-hidden="true"><i></i></span>
+              <span class="tuning-copy"><span class="tg-name">Windows Game Mode</span><span class="tg-desc">Prioritize the active game workload</span></span>
+              <span class="tuning-scope">CPU / GPU</span>
+            </label>
+          </section>
+
+          <section class="tuning-group" aria-labelledby="overhead-tuning-title">
+            <header class="tuning-group-head"><div><strong id="overhead-tuning-title">Background overhead</strong><span>Reduce competition without killing apps</span></div><span class="tuning-group-tag">SAFE</span></header>
+            <div class="toggle-card tuning-card">
+              <label class="tuning-toggle-label">
+                <input type="checkbox" data-opt="memoryReadiness">
+                <span class="tuning-switch" aria-hidden="true"><i></i></span>
+                <span class="tuning-copy"><span class="tg-name">Memory readiness</span><span id="memory-balance-summary-main" class="tg-desc">Check pressure; configure apps to yield memory</span></span>
+              </label>
+              <button id="memory-balance-configure" class="tuning-config-btn" type="button" aria-haspopup="dialog" aria-controls="memory-tools-overlay" title="Configure memory balance">
+                <span id="memory-balance-count" class="tuning-config-count">0</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"></path><path d="M1 14h6M9 8h6M17 16h6"></path></svg>
+              </button>
+            </div>
+            <label class="toggle-card tuning-option">
+              <input type="checkbox" data-opt="pauseBackgroundRecording">
+              <span class="tuning-switch" aria-hidden="true"><i></i></span>
+              <span class="tuning-copy"><span class="tg-name">Pause replay buffer</span><span class="tg-desc">Stop background capture; manual capture stays</span></span>
+              <span class="tuning-scope">CAPTURE</span>
+            </label>
+          </section>
+
+          <section class="tuning-group" aria-labelledby="startup-tuning-title">
+            <header class="tuning-group-head"><div><strong id="startup-tuning-title">Session startup</strong><span>Open only the tools you choose</span></div><span class="tuning-group-tag optional">OPTIONAL</span></header>
+            <div class="toggle-card tuning-card">
+              <label class="tuning-toggle-label">
+                <input type="checkbox" data-opt="launchApplications">
+                <span class="tuning-switch" aria-hidden="true"><i></i></span>
+                <span class="tuning-copy"><span class="tg-name">Launch applications</span><span id="launch-apps-summary" class="tg-desc">Steam</span></span>
+              </label>
+              <button id="launch-apps-configure" class="tuning-config-btn" type="button" aria-haspopup="dialog" aria-controls="launch-apps-overlay" title="Configure launch applications">
+                <span id="launch-apps-count" class="tuning-config-count">1</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.12.37.33.7.6 1 .3.27.68.41 1.1.4h.09v4h-.09a1.7 1.7 0 0 0-1.7.6z"></path></svg>
+              </button>
+            </div>
+          </section>
         </div>
         <div class="safe-session-note">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
-          <span>No apps are closed, suspended, or reprioritized.</span>
+          <span>Only enabled actions run. Every reversible Windows change is recorded before activation.</span>
         </div>
       </div>
 
@@ -104,12 +145,12 @@
               <span id="launch-state-chip" class="launch-state-chip"><i></i> READY</span>
             </header>
             <div class="launch-panel-body">
-              <div class="launch-context launch-context-profile">
-                <span>PROFILE</span>
-                <strong id="launch-profile-name">Performance</strong>
-                <small id="launch-profile-detail">5 session actions selected</small>
+              <div class="launch-context launch-context-mode">
+                <span>MODE</span>
+                <strong id="launch-mode-name">Performance</strong>
+                <small id="launch-mode-detail">4 tuning actions active</small>
               </div>
-          <button id="boost-btn" class="boost-btn" type="button" title="Activate Gaming Mode" aria-label="Activate the selected gaming profile">
+          <button id="boost-btn" class="boost-btn" type="button" title="Activate performance session" aria-label="Activate the performance gaming session">
             <svg class="boost-ring" width="158" height="158" viewBox="0 0 158 158" aria-hidden="true">
               <defs>
                 <linearGradient id="boost-gradient" x1="16" y1="18" x2="142" y2="140" gradientUnits="userSpaceOnUse">
@@ -129,7 +170,7 @@
                 <svg class="boost-restore-icon" width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
               </span>
               <span id="boost-label" class="boost-label">ACTIVATE</span>
-              <span id="boost-sublabel" class="boost-sublabel">SELECTED PROFILE</span>
+              <span id="boost-sublabel" class="boost-sublabel">PERFORMANCE SESSION</span>
             </span>
           </button>
               <div class="launch-context launch-context-safety">
@@ -158,7 +199,7 @@
               </button>
             </div>
           </div>
-          <div id="hero-hint" class="hero-hint">One click applies the selected session profile. Click again to restore.</div>
+          <div id="hero-hint" class="hero-hint">One performance mode. Tune what runs, activate once, then restore when finished.</div>
           </section>
         </div>
 

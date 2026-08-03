@@ -1,21 +1,20 @@
 import { api } from './api';
 import { Optimizer, LogLevel } from './optimizer';
-import { PRESETS, defaultOptions } from './config';
-import { BoostOptions, BoostReport, Preset } from './types';
+import { defaultOptions } from './config';
+import { BoostOptions, BoostReport } from './types';
 import { confirmDialog } from './dialogs';
 import { SystemDetailsModal } from './system-details';
 import { CleanupToolsModal } from './cleanup-tools';
 import { LaunchAppsModal } from './launch-apps';
 import { StorageMapModal } from './storage-map';
-import { MemoryToolsModal } from './memory-tools';
+import { loadMemoryBalanceApps, MemoryToolsModal } from './memory-tools';
 
-// Orchestrator. Owns app-wide UI state (current options/preset, timers), wires
+// Orchestrator. Owns app-wide UI state (session options and timers), wires
 // DOM events, and delegates the actual work to the Optimizer controller —
 // mirroring how PicoNote's `PicoNoteApp` delegates to its feature managers.
 class PicoBoostApp {
   private optimizer!: Optimizer;
   private options: BoostOptions = defaultOptions();
-  private preset: Preset = 'Performance';
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private closing = false;
   private closeQueued = false;
@@ -48,13 +47,16 @@ class PicoBoostApp {
     this.setProgress(0);
 
     this.setupTitlebar();
-    this.setupPresets();
     this.setupToggles();
-    this.updateLaunchProfile();
+    this.updateSessionSummary();
     this.applyOptionsToUI();
     const systemDetails = new SystemDetailsModal((message) => this.toast(message));
     new CleanupToolsModal((message) => this.toast(message));
-    new MemoryToolsModal((message) => this.toast(message));
+    new MemoryToolsModal(
+      (message) => this.toast(message),
+      (applications) => this.updateMemoryBalanceSummary(applications),
+    );
+    this.updateMemoryBalanceSummary(loadMemoryBalanceApps());
     new StorageMapModal((message) => this.toast(message));
     new LaunchAppsModal(
       (message) => this.toast(message),
@@ -92,7 +94,7 @@ class PicoBoostApp {
     this.log(
       this.optimizer.hasRestoreState()
         ? 'A PicoBoost session is active. Press RESTORE when you finish playing.'
-        : 'PicoBoost ready. Choose a profile and press ACTIVATE.',
+        : 'PicoBoost ready. Review Session Tuning and press ACTIVATE.',
       'info',
     );
   }
@@ -114,29 +116,14 @@ class PicoBoostApp {
     });
   }
 
-  // ---- Presets & toggles --------------------------------------------------
-
-  private setupPresets(): void {
-    document.getElementById('preset-group')?.querySelectorAll<HTMLButtonElement>('.preset-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        this.preset = btn.dataset.preset as Preset;
-        this.options = { ...PRESETS[this.preset] };
-        document.querySelectorAll('.preset-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.applyOptionsToUI();
-        this.updateLaunchProfile();
-      });
-    });
-  }
+  // ---- Session tuning -----------------------------------------------------
 
   private setupToggles(): void {
     document.getElementById('toggle-list')?.querySelectorAll<HTMLInputElement>('input[data-opt]').forEach((box) => {
       box.addEventListener('change', () => {
         const key = box.dataset.opt as keyof BoostOptions;
         this.options[key] = box.checked;
-        // Toggling by hand means we're no longer on a named preset.
-        document.querySelectorAll('.preset-btn').forEach((button) => button.classList.remove('active'));
-        this.updateLaunchProfile(true);
+        this.updateSessionSummary();
       });
     });
   }
@@ -148,10 +135,19 @@ class PicoBoostApp {
     });
   }
 
-  private updateLaunchProfile(custom = false): void {
+  private updateSessionSummary(): void {
     const enabled = Object.values(this.options).filter(Boolean).length;
-    (document.getElementById('launch-profile-name') as HTMLElement).textContent = custom ? 'Custom' : this.preset;
-    (document.getElementById('launch-profile-detail') as HTMLElement).textContent = `${enabled} session ${enabled === 1 ? 'action' : 'actions'} selected`;
+    (document.getElementById('launch-mode-name') as HTMLElement).textContent = 'Performance';
+    (document.getElementById('launch-mode-detail') as HTMLElement).textContent = `${enabled} tuning ${enabled === 1 ? 'action' : 'actions'} active`;
+    (document.getElementById('tuning-active-count') as HTMLElement).textContent = `${enabled} ACTIVE`;
+  }
+
+  private updateMemoryBalanceSummary(applications: string[]): void {
+    const count = applications.length;
+    (document.getElementById('memory-balance-count') as HTMLElement).textContent = String(count);
+    (document.getElementById('memory-balance-summary-main') as HTMLElement).textContent = count
+      ? `${count} background ${count === 1 ? 'app' : 'apps'} configured to yield memory`
+      : 'Check pressure; configure apps to yield memory';
   }
 
   // ---- System stats -------------------------------------------------------
@@ -310,15 +306,15 @@ class PicoBoostApp {
   private setBusy(busy: boolean, label: string): void {
     this.boostBtn.classList.toggle('busy', busy);
     this.boostBtn.disabled = busy;
-    this.setProfileControlsDisabled(busy || this.optimizer.hasRestoreState());
+    this.setTuningControlsDisabled(busy || this.optimizer.hasRestoreState());
     (document.getElementById('boost-label') as HTMLElement).textContent = label;
     (document.getElementById('boost-sublabel') as HTMLElement).textContent = label === 'RESTORING'
       ? 'RETURNING TO NORMAL'
-      : busy ? 'APPLYING SAFELY' : 'SELECTED PROFILE';
+      : busy ? 'APPLYING SAFELY' : 'PERFORMANCE SESSION';
     this.boostBtn.setAttribute('aria-busy', String(busy));
     this.boostBtn.setAttribute('aria-label', label === 'RESTORING'
       ? 'Restoring the original Windows settings'
-      : busy ? 'Activating the selected gaming profile' : 'Activate the selected gaming profile');
+      : busy ? 'Activating the performance gaming session' : 'Activate the performance gaming session');
     const launchPanel = document.getElementById('launch-panel') as HTMLElement;
     launchPanel.classList.toggle('working', busy);
     (document.getElementById('launch-panel-title') as HTMLElement).textContent = label === 'RESTORING'
@@ -341,15 +337,15 @@ class PicoBoostApp {
     const status = document.getElementById('session-state') as HTMLElement;
     const launchPanel = document.getElementById('launch-panel') as HTMLElement;
     status.classList.remove('working');
-    this.setProfileControlsDisabled(active);
+    this.setTuningControlsDisabled(active);
     this.boostBtn.classList.toggle('active', active);
     launchPanel.classList.toggle('active', active);
     launchPanel.classList.remove('working');
-    this.boostBtn.title = active ? 'Restore the original Windows state' : 'Activate the selected gaming profile';
-    this.boostBtn.setAttribute('aria-label', active ? 'Restore the original Windows state' : 'Activate the selected gaming profile');
+    this.boostBtn.title = active ? 'Restore the original Windows state' : 'Activate the performance gaming session';
+    this.boostBtn.setAttribute('aria-label', active ? 'Restore the original Windows state' : 'Activate the performance gaming session');
     this.boostBtn.setAttribute('aria-busy', 'false');
     (document.getElementById('boost-label') as HTMLElement).textContent = active ? 'RESTORE' : 'ACTIVATE';
-    (document.getElementById('boost-sublabel') as HTMLElement).textContent = active ? 'END GAMING SESSION' : 'SELECTED PROFILE';
+    (document.getElementById('boost-sublabel') as HTMLElement).textContent = active ? 'END GAMING SESSION' : 'PERFORMANCE SESSION';
     (document.getElementById('launch-panel-title') as HTMLElement).textContent = active ? 'Gaming session is active' : 'Ready to optimize';
     (document.getElementById('launch-state-chip') as HTMLElement).lastChild!.textContent = active ? ' ACTIVE' : ' READY';
     status.classList.toggle('active', active);
@@ -358,10 +354,7 @@ class PicoBoostApp {
       : 'Reversible session ready';
   }
 
-  private setProfileControlsDisabled(disabled: boolean): void {
-    document.querySelectorAll<HTMLButtonElement>('.preset-btn').forEach((button) => {
-      button.disabled = disabled;
-    });
+  private setTuningControlsDisabled(disabled: boolean): void {
     document.querySelectorAll<HTMLInputElement>('input[data-opt]').forEach((input) => {
       input.disabled = disabled;
     });

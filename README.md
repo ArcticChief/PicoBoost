@@ -5,28 +5,26 @@ Tauri 2, Rust, TypeScript, and vanilla CSS. It applies a small set of reversible
 Windows changes before a game session and restores the recorded state when the
 session ends.
 
-PicoBoost combines reversible gaming-session profiles with focused tools for
+PicoBoost combines one configurable performance session with focused tools for
 memory readiness, system cleanup, hardware status, application launching, and
 visual storage analysis.
 
 ## Gaming-session workflow
 
 The central control moves through **Ready**, **Applying**, **Active**, and
-**Restoring** states. Every reversible change is checkpointed as soon as it is
-made. If one restore step fails, the remaining snapshot is kept so restoration
-can be attempted again.
+**Restoring** states. PicoBoost always starts from its Performance baseline;
+there is no mode selector to manage. Session Tuning organizes the available
+actions by their real effect:
 
-Included profiles:
+- **Windows performance:** High Performance power and Windows Game Mode.
+- **Background overhead:** memory readiness/balance and the background replay
+  buffer.
+- **Session startup:** optional launch applications.
 
-| Profile | Memory readiness | High Performance | Game Mode | Pause background replay |
-| --- | --- | --- | --- | --- |
-| Performance | Yes | Yes | Yes | Yes |
-| Balanced | Yes | Yes | Yes | No |
-| Minimal | No | No | Yes | No |
-
-Application launching is optional and is not enabled by any profile. Steam is
-included as the default choice, and users can add, order, enable, or disable
-their own Windows executables.
+Every reversible change is checkpointed as soon as it is made. If one restore
+step fails, the remaining snapshot is kept so restoration can be attempted
+again. Steam is included as the default launch choice, and users can add,
+order, enable, or disable their own Windows executables.
 
 ## Memory Readiness
 

@@ -3,6 +3,7 @@ import { confirmDialog } from './dialogs';
 import { MemoryProcess, MemorySnapshot } from './types';
 
 type Notify = (message: string) => void;
+type BalanceChange = (applications: string[]) => void;
 const MEMORY_BALANCE_KEY = 'picoboost_memory_balance_apps_v1';
 
 export function loadMemoryBalanceApps(): string[] {
@@ -39,8 +40,12 @@ export class MemoryToolsModal {
   private busy = false;
   private previousFocus: HTMLElement | null = null;
 
-  constructor(private readonly notify: Notify) {
+  constructor(
+    private readonly notify: Notify,
+    private readonly onBalanceChange: BalanceChange = () => undefined,
+  ) {
     document.getElementById('memory-tools-btn')?.addEventListener('click', () => this.open());
+    document.getElementById('memory-balance-configure')?.addEventListener('click', () => this.open());
     this.closeButton.addEventListener('click', () => this.close());
     this.refreshButton.addEventListener('click', () => void this.load());
     this.closeSelectedButton.addEventListener('click', () => void this.onCloseAction());
@@ -203,7 +208,9 @@ export class MemoryToolsModal {
   }
 
   private saveBalanceApps(): void {
-    localStorage.setItem(MEMORY_BALANCE_KEY, JSON.stringify([...this.balanceApps]));
+    const applications = [...this.balanceApps];
+    localStorage.setItem(MEMORY_BALANCE_KEY, JSON.stringify(applications));
+    this.onBalanceChange(applications);
   }
 
   private renderBalancePlan(): void {

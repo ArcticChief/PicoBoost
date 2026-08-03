@@ -1,34 +1,18 @@
-import { BoostOptions, Preset } from './types';
+import { BoostOptions } from './types';
 
 /**
- * Safe-by-default session profiles. Every optimization changes a documented
- * Windows setting that PicoBoost snapshots and restores. Launching applications
- * is a convenience, so presets never enable it without an explicit user choice.
+ * PicoBoost has one performance baseline. Every enabled optimization changes a
+ * documented Windows setting that PicoBoost snapshots and restores. Launching
+ * applications remains opt-in because it is preparation rather than tuning.
  */
-export const PRESETS: Record<Preset, BoostOptions> = {
-  Performance: {
-    memoryReadiness: true,
-    powerPlan: true,
-    gameMode: true,
-    pauseBackgroundRecording: true,
-    launchApplications: false,
-  },
-  Balanced: {
-    memoryReadiness: true,
-    powerPlan: true,
-    gameMode: true,
-    pauseBackgroundRecording: false,
-    launchApplications: false,
-  },
-  Minimal: {
-    memoryReadiness: false,
-    powerPlan: false,
-    gameMode: true,
-    pauseBackgroundRecording: false,
-    launchApplications: false,
-  },
+const PERFORMANCE_OPTIONS: Readonly<BoostOptions> = {
+  memoryReadiness: true,
+  powerPlan: true,
+  gameMode: true,
+  pauseBackgroundRecording: true,
+  launchApplications: false,
 };
 
 export function defaultOptions(): BoostOptions {
-  return { ...PRESETS.Performance };
+  return { ...PERFORMANCE_OPTIONS };
 }
