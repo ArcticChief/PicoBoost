@@ -59,8 +59,8 @@ helper; Explorer and shell processes remain protected.
 
 The system-status card opens a focused hardware view containing:
 
-- CPU name, physical cores, logical processors, maximum clock, and temperature
-  when a supported sensor source is available.
+- CPU name, physical cores, logical processors, live load, current/maximum
+  clock, and temperature when a trusted sensor provider is already available.
 - Full GPU names, driver versions, VRAM, utilization, and temperature when
   supported by the installed driver tooling.
 - Installed and available memory, DDR generation, configured memory speed,
@@ -68,8 +68,8 @@ The system-status card opens a focused hardware view containing:
 - Click-to-copy CPU and GPU names.
 
 Hardware telemetry is preloaded after the main window becomes interactive so
-opening the modal does not stall navigation. Unsupported sensors are reported
-as unavailable rather than estimated.
+opening the modal does not stall navigation. Temperature rows appear only for
+trustworthy readings; PicoBoost does not estimate or mislabel thermal zones.
 
 ## System Cleanup
 

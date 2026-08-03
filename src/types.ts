@@ -86,6 +86,8 @@ export interface CpuDetails {
   name: string;
   physical_cores: number;
   logical_processors: number;
+  load_percent: number | null;
+  current_clock_mhz: number | null;
   max_clock_mhz: number | null;
   temperature_c: number | null;
 }

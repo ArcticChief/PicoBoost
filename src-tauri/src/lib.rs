@@ -179,6 +179,8 @@ pub struct CpuDetails {
     pub name: String,
     pub physical_cores: u32,
     pub logical_processors: u32,
+    pub load_percent: Option<u32>,
+    pub current_clock_mhz: Option<u32>,
     pub max_clock_mhz: Option<u32>,
     pub temperature_c: Option<f64>,
 }
@@ -1735,6 +1737,23 @@ $gpuDevices = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyConti
 })
 if (-not $cpu) { throw 'Windows did not return CPU information' }
 
+$cpuPerformance = $null
+try {
+  $cpuPerformance = Get-CimInstance Win32_PerfFormattedData_Counters_ProcessorInformation -ErrorAction Stop |
+    Where-Object { $_.Name -eq '_Total' } |
+    Select-Object -First 1
+} catch {}
+$cpuLoad = if ($cpuPerformance -and $null -ne $cpuPerformance.PercentProcessorUtility) {
+  [uint32][math]::Min(100, [math]::Round([double]$cpuPerformance.PercentProcessorUtility))
+} elseif ($null -ne $cpu.LoadPercentage) {
+  [uint32][math]::Min(100, [math]::Round([double]$cpu.LoadPercentage))
+} else { $null }
+$currentClock = if ($cpuPerformance -and $cpuPerformance.ProcessorFrequency) {
+  [uint32]$cpuPerformance.ProcessorFrequency
+} elseif ($cpu.CurrentClockSpeed) {
+  [uint32]$cpu.CurrentClockSpeed
+} else { $null }
+
 $sensors = @()
 $hardware = @()
 $sensorProvider = $null
@@ -1862,14 +1881,16 @@ $powerOutput = @(powercfg /getactivescheme 2>$null)
 $powerPlan = 'Not reported'
 if (($powerOutput -join ' ') -match '\((.+)\)') { $powerPlan = $Matches[1] }
 
-$sensorStatus = if ($sensorProvider -and $nvidiaRows.Count -gt 0) {
-  "$sensorProvider and NVIDIA driver telemetry"
-} elseif ($sensorProvider) {
-  "$sensorProvider sensor telemetry"
-} elseif ($nvidiaRows.Count -gt 0) {
-  'NVIDIA driver telemetry; CPU sensor not exposed by Windows'
+$hasCpuTemperature = $null -ne $cpuTemperature
+$hasGpuTelemetry = @($gpuDetails | Where-Object { $null -ne $_.temperature_c -or $null -ne $_.utilization_percent }).Count -gt 0
+$sensorStatus = if ($hasCpuTemperature -and $hasGpuTelemetry) {
+  "$sensorProvider CPU sensors and graphics-driver telemetry"
+} elseif ($hasCpuTemperature) {
+  "$sensorProvider CPU sensor telemetry"
+} elseif ($hasGpuTelemetry) {
+  'Graphics-driver telemetry and live Windows performance data'
 } else {
-  'Temperature sensors not exposed; LibreHardwareMonitor can provide them'
+  'Live Windows performance data'
 }
 
 [pscustomobject]@{
@@ -1877,6 +1898,8 @@ $sensorStatus = if ($sensorProvider -and $nvidiaRows.Count -gt 0) {
     name = [string]$cpu.Name.Trim()
     physical_cores = [uint32]$cpu.NumberOfCores
     logical_processors = [uint32]$cpu.NumberOfLogicalProcessors
+    load_percent = $cpuLoad
+    current_clock_mhz = $currentClock
     max_clock_mhz = if ($cpu.MaxClockSpeed) { [uint32]$cpu.MaxClockSpeed } else { $null }
     temperature_c = $cpuTemperature
   }
@@ -4437,6 +4460,11 @@ mod tests {
         assert!(!details.cpu.name.trim().is_empty());
         assert!(details.cpu.physical_cores > 0);
         assert!(details.cpu.logical_processors >= details.cpu.physical_cores);
+        assert!(details.cpu.load_percent.is_some_and(|load| load <= 100));
+        assert!(details.cpu.current_clock_mhz.is_some_and(|clock| clock > 0));
+        if let Some(temperature) = details.cpu.temperature_c {
+            assert!(temperature > 0.0 && temperature < 160.0);
+        }
         assert!(details.memory.total_mb > 0);
         assert!(!details.memory.memory_type.trim().is_empty());
     }

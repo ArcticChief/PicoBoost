@@ -203,12 +203,14 @@ export class SystemDetailsModal {
   }
 
   private cpuMetrics(cpu: CpuDetails): Metric[] {
-    return [
+    const metrics: Metric[] = [
       { label: 'Physical cores', value: String(cpu.physical_cores) },
       { label: 'Threads', value: String(cpu.logical_processors) },
-      { label: 'Reported clock', value: cpu.max_clock_mhz ? `${(cpu.max_clock_mhz / 1000).toFixed(2)} GHz` : 'Not reported', tone: cpu.max_clock_mhz ? undefined : 'muted' },
-      temperatureMetric(cpu.temperature_c),
+      { label: 'CPU load', value: cpu.load_percent !== null ? `${cpu.load_percent}%` : 'Not reported', tone: cpu.load_percent !== null ? undefined : 'muted' },
+      clockMetric(cpu.current_clock_mhz, cpu.max_clock_mhz),
     ];
+    if (cpu.temperature_c !== null) metrics.push(temperatureMetric(cpu.temperature_c));
+    return metrics;
   }
 
   private gpuMetrics(gpu: GpuDetails): Metric[] {
@@ -217,12 +219,13 @@ export class SystemDetailsModal {
         ? `${gb(gpu.vram_used_mb)} / ${gb(gpu.vram_total_mb)} GB`
         : `${gb(gpu.vram_total_mb)} GB`
       : 'Not reported';
-    return [
+    const metrics: Metric[] = [
       { label: 'VRAM', value: vram, tone: gpu.vram_total_mb ? undefined : 'muted' },
       { label: 'GPU load', value: gpu.utilization_percent !== null ? `${gpu.utilization_percent}%` : 'Not reported', tone: gpu.utilization_percent !== null ? undefined : 'muted' },
-      temperatureMetric(gpu.temperature_c),
       { label: 'Driver', value: gpu.driver_version || 'Not reported', tone: gpu.driver_version ? undefined : 'muted' },
     ];
+    if (gpu.temperature_c !== null) metrics.splice(2, 0, temperatureMetric(gpu.temperature_c));
+    return metrics;
   }
 
   private unavailableGpuCard(): HTMLElement {
@@ -300,13 +303,28 @@ export class SystemDetailsModal {
   }
 }
 
-function temperatureMetric(value: number | null): Metric {
-  if (value === null) return { label: 'Temperature', value: 'Not reported', tone: 'muted' };
+function temperatureMetric(value: number): Metric {
   return {
     label: 'Temperature',
     value: `${value.toFixed(1)} °C`,
     tone: value >= 90 ? 'hot' : value >= 75 ? 'warm' : 'good',
   };
+}
+
+function clockMetric(currentMhz: number | null, maximumMhz: number | null): Metric {
+  if (currentMhz !== null && maximumMhz !== null) {
+    return {
+      label: 'Clock / maximum',
+      value: `${ghz(currentMhz)} / ${ghz(maximumMhz)} GHz`,
+    };
+  }
+  if (currentMhz !== null) return { label: 'Current clock', value: `${ghz(currentMhz)} GHz` };
+  if (maximumMhz !== null) return { label: 'Maximum clock', value: `${ghz(maximumMhz)} GHz` };
+  return { label: 'Clock', value: 'Not reported', tone: 'muted' };
+}
+
+function ghz(megahertz: number): string {
+  return (megahertz / 1000).toFixed(2);
 }
 
 function gb(megabytes: number): string {
