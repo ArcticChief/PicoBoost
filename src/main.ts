@@ -141,8 +141,8 @@ class PicoBoostApp {
 
   private updateSessionSummary(): void {
     const enabled = Object.values(this.options).filter(Boolean).length;
-    (document.getElementById('launch-mode-name') as HTMLElement).textContent = 'Performance';
-    (document.getElementById('launch-mode-detail') as HTMLElement).textContent = `${enabled} tuning ${enabled === 1 ? 'action' : 'actions'} active`;
+    (document.getElementById('launch-tuning-name') as HTMLElement).textContent = `${enabled} ${enabled === 1 ? 'action' : 'actions'} enabled`;
+    (document.getElementById('launch-tuning-detail') as HTMLElement).textContent = 'Adjust before activation';
     (document.getElementById('tuning-active-count') as HTMLElement).textContent = `${enabled} ACTIVE`;
   }
 
