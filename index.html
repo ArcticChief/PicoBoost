@@ -144,17 +144,12 @@
           <section id="launch-panel" class="launch-panel" aria-labelledby="launch-panel-title">
             <header class="launch-panel-head">
               <div>
-                <span class="launch-kicker">GAME SESSION CONTROL</span>
                 <strong id="launch-panel-title">Ready to optimize</strong>
+                <span id="launch-panel-sub" class="launch-panel-sub">4 actions enabled</span>
               </div>
               <span id="launch-state-chip" class="launch-state-chip"><i></i> READY</span>
             </header>
             <div class="launch-panel-body">
-              <div class="launch-context launch-context-tuning">
-                <span>TUNING</span>
-                <strong id="launch-tuning-name">4 actions enabled</strong>
-                <small id="launch-tuning-detail">Adjust before activation</small>
-              </div>
           <button id="boost-btn" class="boost-btn" type="button" title="Tune the PC for performance" aria-label="Tune the PC for performance">
             <svg class="boost-ring" width="158" height="158" viewBox="0 0 158 158" aria-hidden="true">
               <defs>
@@ -178,11 +173,6 @@
               <span id="boost-sublabel" class="boost-sublabel">PERFORMANCE</span>
             </span>
           </button>
-              <div class="launch-context launch-context-safety">
-                <span>SOFT RESTORE</span>
-                <strong>Optional</strong>
-                <small>Defaults recorded — restore softly anytime</small>
-              </div>
             </div>
           <div class="hero-actions">
             <div id="session-state" class="session-state" role="status" aria-live="polite"><span class="session-state-dot"></span><span id="session-state-text">Ready to tune</span></div>
@@ -213,14 +203,16 @@
               </button>
             </div>
           </div>
-          <div id="hero-hint" class="hero-hint">Activate once. Restore returns every recorded setting.</div>
           </section>
         </div>
 
-        <div class="console-wrap">
+        <div id="console-wrap" class="console-wrap collapsed">
           <div class="console-head">
-            <span class="console-title">ACTIVITY</span>
-            <button id="clear-log" class="mini-btn" title="Clear log">Clear</button>
+            <button id="console-toggle" class="console-toggle" type="button" aria-expanded="false" aria-controls="console">
+              <svg class="console-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg>
+              <span class="console-title">ACTIVITY</span>
+            </button>
+            <button id="clear-log" class="mini-btn" title="Clear log" type="button">Clear</button>
           </div>
           <div id="console" class="console"></div>
         </div>

@@ -78,6 +78,11 @@ class PicoBoostApp {
 
     this.boostBtn.addEventListener('click', () => void this.onPrimaryAction());
     document.getElementById('restore-soft')?.addEventListener('click', () => void this.onRestore());
+    document.getElementById('console-toggle')?.addEventListener('click', () => {
+      const wrap = document.getElementById('console-wrap');
+      const collapsed = wrap?.classList.toggle('collapsed');
+      document.getElementById('console-toggle')?.setAttribute('aria-expanded', String(!collapsed));
+    });
     document.getElementById('clear-log')?.addEventListener('click', () => {
       this.consoleEl.replaceChildren();
     });
@@ -143,8 +148,7 @@ class PicoBoostApp {
 
   private updateSessionSummary(): void {
     const enabled = Object.values(this.options).filter(Boolean).length;
-    (document.getElementById('launch-tuning-name') as HTMLElement).textContent = `${enabled} ${enabled === 1 ? 'action' : 'actions'} enabled`;
-    (document.getElementById('launch-tuning-detail') as HTMLElement).textContent = 'Adjust before activation';
+    (document.getElementById('launch-panel-sub') as HTMLElement).textContent = `${enabled} ${enabled === 1 ? 'action' : 'actions'} enabled`;
     (document.getElementById('tuning-active-count') as HTMLElement).textContent = `${enabled} ACTIVE`;
   }
 
