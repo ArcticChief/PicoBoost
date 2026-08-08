@@ -53,6 +53,10 @@ html, body {
   gap: 7px;
   padding: 0 12px;
 }
+/* Let clicks on the logo and title fall through to the drag region so the
+   whole title bar can drag the window, not just the empty gaps. */
+.titlebar-logo,
+.titlebar-title { pointer-events: none; }
 .titlebar-title {
   font-size: 12px;
   font-weight: 600;
