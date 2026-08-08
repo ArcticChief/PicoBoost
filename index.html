@@ -155,7 +155,7 @@
                 <strong id="launch-tuning-name">4 actions enabled</strong>
                 <small id="launch-tuning-detail">Adjust before activation</small>
               </div>
-          <button id="boost-btn" class="boost-btn" type="button" title="Activate performance session" aria-label="Activate the performance gaming session">
+          <button id="boost-btn" class="boost-btn" type="button" title="Tune the PC for performance" aria-label="Tune the PC for performance">
             <svg class="boost-ring" width="158" height="158" viewBox="0 0 158 158" aria-hidden="true">
               <defs>
                 <linearGradient id="boost-gradient" x1="16" y1="18" x2="142" y2="140" gradientUnits="userSpaceOnUse">
@@ -174,18 +174,22 @@
                 <svg class="boost-activate-icon" width="31" height="31" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                 <svg class="boost-restore-icon" width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
               </span>
-              <span id="boost-label" class="boost-label">ACTIVATE</span>
-              <span id="boost-sublabel" class="boost-sublabel">PERFORMANCE SESSION</span>
+              <span id="boost-label" class="boost-label">TUNE</span>
+              <span id="boost-sublabel" class="boost-sublabel">PERFORMANCE</span>
             </span>
           </button>
               <div class="launch-context launch-context-safety">
-                <span>SAFE RETURN</span>
-                <strong>Reversible</strong>
-                <small>Original state recorded on activate</small>
+                <span>SOFT RESTORE</span>
+                <strong>Optional</strong>
+                <small>Defaults recorded — restore softly anytime</small>
               </div>
             </div>
           <div class="hero-actions">
-            <div id="session-state" class="session-state" role="status" aria-live="polite"><span class="session-state-dot"></span><span id="session-state-text">Reversible session ready</span></div>
+            <div id="session-state" class="session-state" role="status" aria-live="polite"><span class="session-state-dot"></span><span id="session-state-text">Ready to tune</span></div>
+            <button id="restore-soft" class="restore-soft hidden" type="button" title="Restore the original Windows defaults">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
+              Restore defaults
+            </button>
             <div class="hero-tools">
               <button id="memory-tools-btn" class="cleanup-tools-btn memory-tools-btn" type="button" aria-haspopup="dialog" aria-controls="memory-tools-overlay">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v3M16 3v3M8 18v3M16 18v3M3 8h3M18 8h3M3 16h3M18 16h3"></path><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M9 10h6M9 14h4"></path></svg>
@@ -201,6 +205,11 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>
                 Storage Map
                 <span>Manual</span>
+              </button>
+              <button id="software-tools-btn" class="cleanup-tools-btn software-tools-btn" type="button" aria-haspopup="dialog" aria-controls="software-overlay">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18M7 6.5h.01M10 6.5h.01"></path></svg>
+                Software Manager
+                <span>Uninstall</span>
               </button>
             </div>
           </div>
@@ -308,6 +317,51 @@
           <div class="cleanup-footer-actions">
             <button id="cleanup-rescan" class="cleanup-rescan" type="button">Rescan</button>
             <button id="cleanup-run" class="cleanup-run" type="button" disabled>Clean selected</button>
+          </div>
+        </footer>
+      </section>
+    </div>
+
+    <div id="software-overlay" class="cleanup-overlay software-overlay hidden" aria-hidden="true">
+      <section class="cleanup-dialog software-dialog" role="dialog" aria-modal="true" aria-labelledby="software-title">
+        <header class="cleanup-header">
+          <div class="cleanup-heading">
+            <span class="cleanup-heading-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18M7 6.5h.01M10 6.5h.01"></path></svg>
+            </span>
+            <div>
+              <h2 id="software-title">Software manager</h2>
+              <p>Uninstall programs and clear leftover Add/Remove entries</p>
+            </div>
+          </div>
+          <button id="software-close" class="system-details-close" type="button" aria-label="Close software manager">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+          </button>
+        </header>
+        <div class="cleanup-safety-strip">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          Uninstalling runs each program's own uninstaller. Only dead leftover entries can be removed; your files and saves are never touched.
+        </div>
+        <div class="software-toolbar">
+          <input id="software-search" class="software-search" type="search" placeholder="Search installed software…" autocomplete="off" spellcheck="false" aria-label="Search installed software" />
+          <select id="software-sort" class="software-sort" aria-label="Sort installed software">
+            <option value="name">Name</option>
+            <option value="size">Largest</option>
+            <option value="date">Recent</option>
+          </select>
+          <label class="software-filter"><input id="software-orphans-only" type="checkbox" /> Leftovers only</label>
+          <span id="software-count" class="software-count">—</span>
+        </div>
+        <div id="software-content" class="cleanup-content software-content">
+          <div class="cleanup-loading"><span class="details-spinner"></span><span>Reading installed software…</span></div>
+        </div>
+        <footer class="cleanup-footer">
+          <div>
+            <strong id="software-summary">—</strong>
+            <span>Uninstalling opens the program's own uninstaller</span>
+          </div>
+          <div class="cleanup-footer-actions">
+            <button id="software-refresh" class="cleanup-rescan" type="button">Refresh</button>
           </div>
         </footer>
       </section>

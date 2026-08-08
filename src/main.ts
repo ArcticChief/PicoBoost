@@ -2,11 +2,11 @@ import { api } from './api';
 import { Optimizer, LogLevel } from './optimizer';
 import { defaultOptions } from './config';
 import { BoostOptions, BoostReport } from './types';
-import { confirmDialog } from './dialogs';
 import { SystemDetailsModal } from './system-details';
 import { CleanupToolsModal } from './cleanup-tools';
 import { LaunchAppsModal } from './launch-apps';
 import { StorageMapModal } from './storage-map';
+import { SoftwareManagerModal } from './software-manager';
 import { loadMemoryBalanceApps, MemoryToolsModal } from './memory-tools';
 
 // Orchestrator. Owns app-wide UI state (session options and timers), wires
@@ -62,6 +62,7 @@ class PicoBoostApp {
     );
     this.updateMemoryBalanceSummary(loadMemoryBalanceApps());
     new StorageMapModal((message) => this.toast(message));
+    new SoftwareManagerModal((message) => this.toast(message));
     new LaunchAppsModal(
       (message) => this.toast(message),
       (applications) => {
@@ -76,6 +77,7 @@ class PicoBoostApp {
     );
 
     this.boostBtn.addEventListener('click', () => void this.onPrimaryAction());
+    document.getElementById('restore-soft')?.addEventListener('click', () => void this.onRestore());
     document.getElementById('clear-log')?.addEventListener('click', () => {
       this.consoleEl.replaceChildren();
     });
@@ -276,8 +278,10 @@ class PicoBoostApp {
   // ---- Boost / restore ----------------------------------------------------
 
   private async onPrimaryAction(): Promise<void> {
-    if (this.optimizer.hasRestoreState()) await this.onRestore();
-    else await this.onBoost();
+    // The primary button ALWAYS tunes. Re-applying is safe and idempotent, so
+    // you can tune, tweak the options, and tune again. Restore is a separate,
+    // soft action - never something you are forced through to keep working.
+    await this.onBoost();
   }
 
   private async onBoost(): Promise<void> {
@@ -289,18 +293,17 @@ class PicoBoostApp {
       return;
     }
 
-    this.setBusy(true, 'BOOSTING');
+    this.setBusy(true, 'TUNING');
     document.getElementById('dashboard')?.classList.add('hidden');
-    this.log('──────── ACTIVATING GAMING MODE ────────', 'step');
+    this.log('──────── TUNING PC ────────', 'step');
 
     try {
       const report = await this.optimizer.boost(this.options);
       this.renderDashboard(report);
       const windowsTuned = report.powerPlanApplied || report.gameModeEnabled || report.backgroundRecordingPaused || report.memoryBalancedProcesses > 0;
       if (windowsTuned) {
-        this.log(`Gaming session tuned in ${(report.elapsedMs / 1000).toFixed(2)}s.`, 'ok');
-        this.log('Settings are applied. PicoBoost is not processing in the background; press RESTORE when finished.', 'info');
-        this.toast('Performance session active');
+        this.log(`PC tuned in ${(report.elapsedMs / 1000).toFixed(2)}s. Settings stay applied — re-tune anytime, or restore defaults when you like.`, 'ok');
+        this.toast('PC tuned');
       } else if (report.applicationsReady) {
         this.log('Selected applications are ready; no Windows settings were changed.', 'info');
         this.toast('Applications ready');
@@ -312,9 +315,9 @@ class PicoBoostApp {
         this.toast('No changes applied');
       }
     } catch (e) {
-      this.log(`Boost error: ${e}`, 'warn');
+      this.log(`Tune error: ${e}`, 'warn');
     } finally {
-      this.setBusy(false, 'ACTIVATE');
+      this.setBusy(false, 'TUNE');
       this.refreshSessionState();
       this.continueQueuedClose();
     }
@@ -324,59 +327,39 @@ class PicoBoostApp {
     if (this.optimizer.isRunning()) return;
     const started = performance.now();
     this.setBusy(true, 'RESTORING');
-    this.log('──────── RESTORING SETTINGS ────────', 'step');
+    this.log('──────── RESTORING DEFAULTS ────────', 'step');
     try {
       await this.optimizer.restore();
       document.getElementById('dashboard')?.classList.add('hidden');
-      this.toast(`Restore complete in ${((performance.now() - started) / 1000).toFixed(2)}s — nothing remains active`);
+      this.toast(`Defaults restored in ${((performance.now() - started) / 1000).toFixed(2)}s`);
     } catch (e) {
       this.log(`Restore error: ${e}`, 'warn');
     } finally {
-      this.setBusy(false, 'ACTIVATE');
+      this.setBusy(false, 'TUNE');
       this.refreshSessionState();
       this.continueQueuedClose();
     }
   }
 
-  private async onClose(restoreWithoutPrompt = false): Promise<void> {
+  private async onClose(): Promise<void> {
     if (this.closing) return;
     if (this.optimizer.isRunning()) {
       if (!this.closeQueued) {
         this.closeQueued = true;
-        this.log('Close requested. PicoBoost will finish the current step, restore safely, and close.', 'info');
+        this.log('Close requested. PicoBoost will finish the current step, then close.', 'info');
         this.toast('Close queued — finishing safely, then PicoBoost will exit');
       }
       return;
     }
 
+    // Your tuning stays applied on exit ("tune and make it so"). Nothing runs
+    // in the background, and "Restore defaults" remains available next launch.
     this.closing = true;
     try {
-      if (this.optimizer.hasRestoreState()) {
-        const restoreFirst = restoreWithoutPrompt || await confirmDialog(
-          'A performance session is active. Restore the original Windows settings before closing?',
-          { title: 'Restore before exit', confirmText: 'Restore & Close' },
-        );
-        if (!restoreFirst) return;
-
-        this.setBusy(true, 'RESTORING');
-        try {
-          await this.optimizer.restore();
-        } catch (e) {
-          this.log(`Close cancelled because restore is incomplete: ${e}`, 'warn');
-          this.toast('Restore incomplete — PicoBoost stayed open');
-          this.setBusy(false, 'ACTIVATE');
-          this.refreshSessionState();
-          return;
-        }
-      }
-      try {
-        await api.windowClose();
-      } catch (error) {
-        this.log(`Could not close PicoBoost: ${error}`, 'warn');
-        this.toast('PicoBoost could not close. Please try again.');
-        this.setBusy(false, 'ACTIVATE');
-        this.refreshSessionState();
-      }
+      await api.windowClose();
+    } catch (error) {
+      this.log(`Could not close PicoBoost: ${error}`, 'warn');
+      this.toast('PicoBoost could not close. Please try again.');
     } finally {
       this.closing = false;
     }
@@ -385,26 +368,28 @@ class PicoBoostApp {
   private continueQueuedClose(): void {
     if (!this.closeQueued || this.optimizer.isRunning()) return;
     this.closeQueued = false;
-    void this.onClose(true);
+    void this.onClose();
   }
 
   private setBusy(busy: boolean, label: string): void {
     this.boostBtn.classList.toggle('busy', busy);
     this.boostBtn.disabled = busy;
-    this.setTuningControlsDisabled(busy || this.optimizer.hasRestoreState());
+    // Tuning options stay editable except while a tune/restore is mid-flight,
+    // so you can adjust and re-tune freely.
+    this.setTuningControlsDisabled(busy);
     (document.getElementById('boost-label') as HTMLElement).textContent = label;
     (document.getElementById('boost-sublabel') as HTMLElement).textContent = label === 'RESTORING'
       ? 'RETURNING TO NORMAL'
-      : busy ? 'APPLYING SAFELY' : 'PERFORMANCE SESSION';
+      : busy ? 'APPLYING SAFELY' : 'PERFORMANCE';
     this.boostBtn.setAttribute('aria-busy', String(busy));
     this.boostBtn.setAttribute('aria-label', label === 'RESTORING'
       ? 'Restoring the original Windows settings'
-      : busy ? 'Activating the performance gaming session' : 'Activate the performance gaming session');
+      : busy ? 'Applying the performance tuning' : 'Tune the PC for performance');
     const launchPanel = document.getElementById('launch-panel') as HTMLElement;
     launchPanel.classList.toggle('working', busy);
     (document.getElementById('launch-panel-title') as HTMLElement).textContent = label === 'RESTORING'
-      ? 'Restoring your original setup'
-      : busy ? 'Preparing the gaming session' : 'Ready to optimize';
+      ? 'Restoring your defaults'
+      : busy ? 'Applying your tuning' : 'Ready to optimize';
     (document.getElementById('launch-state-chip') as HTMLElement).lastChild!.textContent = label === 'RESTORING'
       ? ' RESTORING' : busy ? ' APPLYING' : ' READY';
     const status = document.getElementById('session-state') as HTMLElement;
@@ -418,25 +403,29 @@ class PicoBoostApp {
   }
 
   private refreshSessionState(): void {
-    const active = this.optimizer.hasRestoreState();
+    // `tuned` = there is recorded state we could softly restore. It never
+    // changes what the primary button does (always tune) or locks the options;
+    // it just reveals the soft "Restore defaults" control and a gentle status.
+    const tuned = this.optimizer.hasRestoreState();
     const status = document.getElementById('session-state') as HTMLElement;
     const launchPanel = document.getElementById('launch-panel') as HTMLElement;
     status.classList.remove('working');
-    this.setTuningControlsDisabled(active);
-    this.boostBtn.classList.toggle('active', active);
-    launchPanel.classList.toggle('active', active);
+    this.setTuningControlsDisabled(false);
+    launchPanel.classList.toggle('active', tuned);
     launchPanel.classList.remove('working');
-    this.boostBtn.title = active ? 'Restore the original Windows state' : 'Activate the performance gaming session';
-    this.boostBtn.setAttribute('aria-label', active ? 'Restore the original Windows state' : 'Activate the performance gaming session');
+    this.boostBtn.title = 'Tune the PC for performance';
+    this.boostBtn.setAttribute('aria-label', 'Tune the PC for performance');
     this.boostBtn.setAttribute('aria-busy', 'false');
-    (document.getElementById('boost-label') as HTMLElement).textContent = active ? 'RESTORE' : 'ACTIVATE';
-    (document.getElementById('boost-sublabel') as HTMLElement).textContent = active ? 'END GAMING SESSION' : 'PERFORMANCE SESSION';
-    (document.getElementById('launch-panel-title') as HTMLElement).textContent = active ? 'Gaming session is active' : 'Ready to optimize';
-    (document.getElementById('launch-state-chip') as HTMLElement).lastChild!.textContent = active ? ' ACTIVE' : ' READY';
-    status.classList.toggle('active', active);
-    (document.getElementById('session-state-text') as HTMLElement).textContent = active
-      ? 'Settings applied · Restore when finished'
-      : 'Reversible session ready';
+    (document.getElementById('boost-label') as HTMLElement).textContent = 'TUNE';
+    (document.getElementById('boost-sublabel') as HTMLElement).textContent = tuned ? 'TAP TO RE-TUNE' : 'PERFORMANCE';
+    (document.getElementById('launch-panel-title') as HTMLElement).textContent = tuned ? 'Tuned — ready to play' : 'Ready to optimize';
+    (document.getElementById('launch-state-chip') as HTMLElement).lastChild!.textContent = tuned ? ' TUNED' : ' READY';
+    status.classList.toggle('active', tuned);
+    (document.getElementById('session-state-text') as HTMLElement).textContent = tuned
+      ? 'Tuned · re-tune anytime, or restore defaults'
+      : 'Ready to tune';
+    const restoreSoft = document.getElementById('restore-soft') as HTMLElement | null;
+    restoreSoft?.classList.toggle('hidden', !tuned);
   }
 
   private setTuningControlsDisabled(disabled: boolean): void {

@@ -2172,6 +2172,82 @@ fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {
     }
 }
 
+// Steam install directory from HKCU\Software\Valve\Steam\SteamPath. Returns
+// None if Steam has never run for this user or the value is missing.
+#[cfg(windows)]
+fn steam_path() -> Option<PathBuf> {
+    use windows_sys::Win32::System::Registry::{
+        RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_SZ,
+    };
+
+    let subkey: Vec<u16> = "Software\\Valve\\Steam\0".encode_utf16().collect();
+    let value: Vec<u16> = "SteamPath\0".encode_utf16().collect();
+    let mut buffer = [0u16; 520];
+    let mut size = (buffer.len() * 2) as u32;
+
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            subkey.as_ptr(),
+            value.as_ptr(),
+            RRF_RT_REG_SZ,
+            std::ptr::null_mut(),
+            buffer.as_mut_ptr() as *mut core::ffi::c_void,
+            &mut size,
+        )
+    };
+
+    if status != 0 {
+        return None;
+    }
+
+    let chars = (size as usize / 2).saturating_sub(1).min(buffer.len());
+    let text = String::from_utf16_lossy(&buffer[..chars]);
+    let trimmed = text.trim_end_matches('\0').trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(trimmed))
+    }
+}
+
+#[cfg(not(windows))]
+fn steam_path() -> Option<PathBuf> {
+    None
+}
+
+// All Steam library roots: the main install plus every extra library listed in
+// libraryfolders.vdf (only the "path" values are read; nothing is deleted here).
+fn steam_library_paths(steam: &Path) -> Vec<PathBuf> {
+    let mut libraries = Vec::new();
+    push_unique(&mut libraries, steam.to_path_buf());
+    for vdf in [
+        steam.join("steamapps\\libraryfolders.vdf"),
+        steam.join("config\\libraryfolders.vdf"),
+    ] {
+        let Ok(text) = fs::read_to_string(&vdf) else {
+            continue;
+        };
+        for line in text.lines() {
+            let Some(rest) = line.trim().strip_prefix("\"path\"") else {
+                continue;
+            };
+            let Some(open) = rest.find('"') else {
+                continue;
+            };
+            let after = &rest[open + 1..];
+            let Some(close) = after.find('"') else {
+                continue;
+            };
+            let unescaped = after[..close].replace("\\\\", "\\");
+            if !unescaped.is_empty() {
+                push_unique(&mut libraries, PathBuf::from(unescaped));
+            }
+        }
+    }
+    libraries
+}
+
 fn browser_cache_paths(local: &Path) -> Vec<PathBuf> {
     let roots = [
         local.join("Google\\Chrome\\User Data"),
@@ -2206,6 +2282,7 @@ fn cleanup_specs() -> Vec<CleanupSpec> {
     let local = env_path("LOCALAPPDATA");
     let profile = env_path("USERPROFILE");
     let windows = env_path("WINDIR");
+    let programdata = env_path("PROGRAMDATA");
     let mut temp_paths = Vec::new();
     if let Some(path) = env_path("TEMP") {
         push_unique(&mut temp_paths, path);
@@ -2239,9 +2316,71 @@ fn cleanup_specs() -> Vec<CleanupSpec> {
             "NVIDIA Corporation\\NV_Cache",
             "AMD\\DxCache",
             "AMD\\GLCache",
+            "Intel\\ShaderCache",
             "D3DSCache",
         ] {
             push_unique(&mut shader_paths, base.join(suffix));
+        }
+    }
+    if let Some(base) = &programdata {
+        push_unique(&mut shader_paths, base.join("NVIDIA Corporation\\NV_Cache"));
+    }
+
+    // Game launcher caches. Only web caches, logs, and temp spools are listed -
+    // never saves, settings, cloud-save caches, or installed game content.
+    let mut launcher_cache = Vec::new();
+    if let Some(base) = &local {
+        for suffix in [
+            "EpicGamesLauncher\\Saved\\Logs",
+            "EpicGamesLauncher\\Saved\\webcache",
+            "EpicGamesLauncher\\Saved\\webcache_4147",
+            "EpicGamesLauncher\\Saved\\webcache_4430",
+            "Battle.net\\Cache",
+            "GOG.com\\Galaxy\\webcache",
+            "GOG.com\\Galaxy\\logs",
+            "Electronic Arts\\EA Desktop\\Logs",
+            "Electronic Arts\\EA Desktop\\cache",
+            "Ubisoft Game Launcher\\cache",
+            "Ubisoft Game Launcher\\logs",
+            "Ubisoft Game Launcher\\spool",
+        ] {
+            push_unique(&mut launcher_cache, base.join(suffix));
+        }
+    }
+
+    // Game crash reports and logs. RED Engine (Witcher 3 / Cyberpunk) crash
+    // queue, plus a generic sweep of engine games: only the per-game
+    // Saved\Crashes and Saved\Logs leaves are added - never Saved\SaveGames
+    // or Saved\Config, so save games can never be touched.
+    let mut game_crash = Vec::new();
+    if let Some(base) = &local {
+        push_unique(&mut game_crash, base.join("REDEngine\\ReportQueue"));
+        if let Ok(entries) = fs::read_dir(base) {
+            for entry in entries.flatten() {
+                let saved = entry.path().join("Saved");
+                let crashes = saved.join("Crashes");
+                if crashes.is_dir() {
+                    push_unique(&mut game_crash, crashes);
+                }
+                let logs = saved.join("Logs");
+                if logs.is_dir() {
+                    push_unique(&mut game_crash, logs);
+                }
+            }
+        }
+    }
+
+    // Steam caches: download HTTP cache, overlay web cache, logs, crash dumps,
+    // and per-game shader caches in every library folder. Only these specific
+    // cache subfolders are listed - never steamapps\common (installed games),
+    // appmanifest files, config.vdf, or loginusers.vdf.
+    let mut steam_cache = Vec::new();
+    if let Some(steam) = steam_path() {
+        for suffix in ["logs", "dumps", "appcache\\httpcache", "config\\htmlcache"] {
+            push_unique(&mut steam_cache, steam.join(suffix));
+        }
+        for library in steam_library_paths(&steam) {
+            push_unique(&mut steam_cache, library.join("steamapps\\shadercache"));
         }
     }
 
@@ -2354,7 +2493,7 @@ fn cleanup_specs() -> Vec<CleanupSpec> {
         CleanupSpec {
             id: "shader_cache",
             name: "Graphics shader caches",
-            description: "DirectX, NVIDIA, and AMD compiled shader caches.",
+            description: "DirectX, NVIDIA, AMD, and Intel compiled shader caches.",
             group: "Advanced",
             default_selected: false,
             caution: Some("Games can stutter temporarily while shaders are compiled again."),
@@ -2374,6 +2513,39 @@ fn cleanup_specs() -> Vec<CleanupSpec> {
                 .as_ref()
                 .map(|p| vec![p.join("Temp")])
                 .unwrap_or_default(),
+            recycle_bin: false,
+        },
+        CleanupSpec {
+            id: "game_launcher_cache",
+            name: "Game launcher caches",
+            description: "Epic, EA, Ubisoft, Battle.net, and GOG launcher web caches, logs, and temp spools.",
+            group: "Advanced",
+            default_selected: false,
+            caution: Some("Close the launcher first for a full clean. Saves, settings, cloud saves, and installed games are never touched."),
+            min_age: None,
+            paths: launcher_cache,
+            recycle_bin: false,
+        },
+        CleanupSpec {
+            id: "game_crash_reports",
+            name: "Game crash reports & logs",
+            description: "Crash dumps and logs from RED Engine (Witcher 3, Cyberpunk) and Unreal Engine games.",
+            group: "Advanced",
+            default_selected: false,
+            caution: Some("Only crash and log folders are cleared, never save games. Keep them if you are diagnosing a game crash."),
+            min_age: None,
+            paths: game_crash,
+            recycle_bin: false,
+        },
+        CleanupSpec {
+            id: "steam_cache",
+            name: "Steam caches",
+            description: "Steam download cache, overlay web cache, logs, crash dumps, and per-game shader caches across every library folder.",
+            group: "Advanced",
+            default_selected: false,
+            caution: Some("Games may recompile shaders (a brief one-time stutter) on next launch. Installed games, saves, and Steam settings are never touched."),
+            min_age: None,
+            paths: steam_cache,
             recycle_bin: false,
         },
     ]
@@ -2622,6 +2794,163 @@ fn run_cleanup(ids: Vec<String>) -> Result<CleanupRunResult, String> {
         bytes_freed: total.bytes,
         failed_items: total.failures,
     })
+}
+
+// ---- Installed software manager -------------------------------------------
+
+#[derive(Debug, serde::Deserialize)]
+struct SoftwareRaw {
+    id: String,
+    name: String,
+    publisher: String,
+    version: String,
+    #[serde(rename = "sizeKb")]
+    size_kb: Option<i64>,
+    #[serde(rename = "installDate")]
+    install_date: String,
+    location: String,
+    uninstall: String,
+    quiet: String,
+    scope: String,
+    orphaned: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SoftwareEntry {
+    pub id: String,
+    pub name: String,
+    pub publisher: String,
+    pub version: String,
+    pub size_mb: u64,
+    pub install_date: String,
+    pub location: String,
+    pub scope: String,
+    pub has_uninstall: bool,
+    pub orphaned: bool,
+}
+
+// A registry id is accepted for uninstall/removal ONLY when it points at a
+// direct entry under ...\Windows\CurrentVersion\Uninstall\<subkey> in HKLM or
+// HKCU. This guard is what keeps these commands from touching anything else in
+// the registry, so it is unit-tested.
+fn valid_uninstall_key(id: &str) -> bool {
+    let lower = id.to_ascii_lowercase();
+    let marker = "\\windows\\currentversion\\uninstall\\";
+    let Some(pos) = lower.find(marker) else {
+        return false;
+    };
+    let hive_ok = lower.contains("hkey_local_machine") || lower.contains("hkey_current_user");
+    let subkey = id[pos + marker.len()..].trim();
+    hive_ok && !subkey.is_empty() && !subkey.contains('\\') && !subkey.contains('\0')
+}
+
+// Windows records InstallDate as YYYYMMDD; present it as YYYY-MM-DD (or blank).
+fn format_install_date(raw: &str) -> String {
+    let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
+    if digits.len() == 8 {
+        format!("{}-{}-{}", &digits[0..4], &digits[4..6], &digits[6..8])
+    } else {
+        String::new()
+    }
+}
+
+#[tauri::command]
+fn list_installed_software() -> Result<Vec<SoftwareEntry>, String> {
+    let script = r#"
+$roots = @(
+  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+  'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall',
+  'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+)
+$items = foreach ($root in $roots) {
+  if (-not (Test-Path $root)) { continue }
+  Get-ChildItem $root -ErrorAction SilentlyContinue | ForEach-Object {
+    $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+    if (-not $p -or -not $p.DisplayName) { return }
+    if ($p.SystemComponent -eq 1) { return }
+    if ($p.ParentKeyName) { return }
+    if ($p.ReleaseType -and $p.ReleaseType -match 'Update|Hotfix') { return }
+    $loc = [string]$p.InstallLocation
+    $orphaned = ($loc -ne '' -and -not (Test-Path -LiteralPath $loc))
+    [pscustomobject]@{
+      id          = [string]$_.PSPath
+      name        = [string]$p.DisplayName
+      publisher   = [string]$p.Publisher
+      version     = [string]$p.DisplayVersion
+      sizeKb      = [int64]($p.EstimatedSize)
+      installDate = [string]$p.InstallDate
+      location    = $loc
+      uninstall   = [string]$p.UninstallString
+      quiet       = [string]$p.QuietUninstallString
+      scope       = if ($root -like 'HKCU*') { 'user' } else { 'machine' }
+      orphaned    = $orphaned
+    }
+  }
+}
+$json = $items | ConvertTo-Json -Depth 3 -Compress
+if (-not $json) { '[]' } elseif ($json.TrimStart().StartsWith('[')) { $json } else { '[' + $json + ']' }
+"#;
+    let out = ps(script)?;
+    let raw: Vec<SoftwareRaw> =
+        serde_json::from_str(&out).map_err(|e| format!("Could not read installed software: {e}"))?;
+    let mut entries: Vec<SoftwareEntry> = raw
+        .into_iter()
+        .filter(|r| valid_uninstall_key(&r.id))
+        .map(|r| SoftwareEntry {
+            size_mb: (r.size_kb.unwrap_or(0).max(0) as u64) / 1024,
+            has_uninstall: !r.uninstall.trim().is_empty() || !r.quiet.trim().is_empty(),
+            install_date: format_install_date(&r.install_date),
+            id: r.id,
+            name: r.name,
+            publisher: r.publisher,
+            version: r.version,
+            location: r.location,
+            scope: r.scope,
+            orphaned: r.orphaned,
+        })
+        .collect();
+    entries.sort_by_key(|a| a.name.to_ascii_lowercase());
+    Ok(entries)
+}
+
+#[tauri::command]
+fn uninstall_software(id: String) -> Result<String, String> {
+    if !valid_uninstall_key(&id) {
+        return Err("That software entry cannot be uninstalled from here.".into());
+    }
+    // Re-read the vendor's OWN uninstall command from the key (never trust a
+    // command passed in from the UI) and launch it, preferring the silent form.
+    let script = r#"
+$p = Get-ItemProperty -LiteralPath '__KEY__' -ErrorAction Stop
+$cmd = if ($p.QuietUninstallString) { $p.QuietUninstallString } else { $p.UninstallString }
+if (-not $cmd) { throw 'This program does not provide an uninstaller.' }
+Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $cmd
+'started'
+"#
+    .replace("__KEY__", &id.replace('\'', "''"));
+    ps(&script)?;
+    Ok("Uninstaller launched. Follow its prompts to finish.".into())
+}
+
+#[tauri::command]
+fn remove_software_leftover(id: String) -> Result<String, String> {
+    if !valid_uninstall_key(&id) {
+        return Err("That entry cannot be removed.".into());
+    }
+    // Re-validate on the server that this is truly an orphan: an install folder
+    // is recorded but no longer exists on disk. Only then is the dead Add/Remove
+    // Programs entry deleted - and only that one leaf key.
+    let script = r#"
+$p = Get-ItemProperty -LiteralPath '__KEY__' -ErrorAction Stop
+$loc = [string]$p.InstallLocation
+if ($loc -eq '') { throw 'No install folder is recorded, so this entry is not safe to auto-remove.' }
+if (Test-Path -LiteralPath $loc) { throw 'The program still appears to be installed. Uninstall it first.' }
+Remove-Item -LiteralPath '__KEY__' -Recurse -Force
+'removed'
+"#
+    .replace("__KEY__", &id.replace('\'', "''"));
+    ps(&script)?;
+    Ok("Removed the leftover registry entry.".into())
 }
 
 // ---- Visual storage analyzer ----------------------------------------------
@@ -4232,6 +4561,9 @@ pub fn run() {
             start_services,
             scan_cleanup,
             run_cleanup,
+            list_installed_software,
+            uninstall_software,
+            remove_software_leftover,
             launch_steam,
             pick_launch_applications,
             launch_application,
@@ -4257,6 +4589,29 @@ pub fn run() {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn valid_uninstall_key_guards_registry_targets() {
+        // Accepts real Add/Remove Programs entries in HKLM and HKCU.
+        assert!(valid_uninstall_key(
+            "Microsoft.PowerShell.Core\\Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{9AB-123}"
+        ));
+        assert!(valid_uninstall_key(
+            "Microsoft.PowerShell.Core\\Registry::HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam"
+        ));
+        // Rejects the Uninstall root itself (no leaf subkey).
+        assert!(!valid_uninstall_key(
+            "Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"
+        ));
+        // Rejects unrelated keys, other hives, and deeper nested paths.
+        assert!(!valid_uninstall_key(
+            "Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\Thing"
+        ));
+        assert!(!valid_uninstall_key("Registry::HKEY_CLASSES_ROOT\\CLSID"));
+        assert!(!valid_uninstall_key(
+            "Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\App\\Extra"
+        ));
+    }
 
     #[test]
     fn cleanup_walker_only_removes_contents_of_controlled_directory() {

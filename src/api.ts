@@ -16,6 +16,7 @@ import {
   WindowsGamingState,
   CleanupCategory,
   CleanupRunResult,
+  SoftwareEntry,
   LaunchApplicationResult,
   StorageScanResult,
   StorageFastModeSupport,
@@ -98,6 +99,18 @@ export const api = {
 
   runCleanup: async (ids: string[]): Promise<CleanupRunResult> => {
     return await invoke<CleanupRunResult>('run_cleanup', { ids });
+  },
+
+  listInstalledSoftware: async (): Promise<SoftwareEntry[]> => {
+    return await invoke<SoftwareEntry[]>('list_installed_software');
+  },
+
+  uninstallSoftware: async (id: string): Promise<string> => {
+    return await invoke<string>('uninstall_software', { id });
+  },
+
+  removeSoftwareLeftover: async (id: string): Promise<string> => {
+    return await invoke<string>('remove_software_leftover', { id });
   },
 
   optimizePowerPlan: async (): Promise<PowerPlanState> => {

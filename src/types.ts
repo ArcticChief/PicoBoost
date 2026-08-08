@@ -139,6 +139,19 @@ export interface CleanupRunResult {
   failed_items: number;
 }
 
+export interface SoftwareEntry {
+  id: string;
+  name: string;
+  publisher: string;
+  version: string;
+  size_mb: number;
+  install_date: string;
+  location: string;
+  scope: string;
+  has_uninstall: boolean;
+  orphaned: boolean;
+}
+
 /** Which optimization steps a boost should run. One flag per feature card. */
 export interface BoostOptions {
   memoryReadiness: boolean;
